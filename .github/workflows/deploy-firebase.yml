@@ -1,0 +1,60 @@
+name: Deploy Firebase (functions + Firestore)
+
+# Deploys Cloud Functions and Firestore rules/indexes to the pexli-drop project.
+# Runs automatically when backend files change on main, and can be run on demand
+# from the Actions tab ("Run workflow"). No terminal needed on your machine.
+#
+# One-time setup (browser only):
+#   1. Firebase console -> Project settings -> Service accounts ->
+#      "Generate new private key" -> download the JSON.
+#   2. Google Cloud console -> IAM -> give that service account the "Owner" role
+#      (or Editor + Service Account User) so it can deploy.
+#   3. GitHub repo -> Settings -> Secrets and variables -> Actions ->
+#      New repository secret named FIREBASE_SERVICE_ACCOUNT -> paste the JSON.
+#   4. Actions tab -> this workflow -> "Run workflow".
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "functions/**"
+      - "firestore.rules"
+      - "firestore.indexes.json"
+      - "firebase.json"
+      - ".github/workflows/deploy-firebase.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      - name: Write service account key
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT secret is not set. See the setup steps in this workflow file."
+            exit 1
+          fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+
+      - name: Deploy functions + Firestore rules & indexes
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          npx --yes firebase-tools@latest deploy \
+            --only functions,firestore \
+            --project pexli-drop \
+            --non-interactive --force
