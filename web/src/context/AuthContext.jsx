@@ -7,6 +7,7 @@ import {
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db, googleProvider, appleProvider, firebaseConfigured } from "../firebase";
 import { api } from "../lib/functions";
+import { DEFAULT_CONFIG } from "../lib/defaultConfig";
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -99,13 +100,18 @@ export function AuthProvider({ children }) {
     });
   }, [applyPendingReferral]);
 
-  // Live config (task toggles / point values / locks).
+  // Live config (task toggles / point values / locks). Falls back to defaults
+  // when the doc doesn't exist yet or rules block the read, so the dashboard
+  // still renders before the backend is fully deployed.
   useEffect(() => {
     if (!firebaseConfigured) return undefined;
     return onSnapshot(
       doc(db, "config", "global"),
-      (snap) => snap.exists() && setConfig(snap.data()),
-      (e) => console.warn("config listen failed", e?.message),
+      (snap) => setConfig(snap.exists() ? { ...DEFAULT_CONFIG, ...snap.data() } : DEFAULT_CONFIG),
+      (e) => {
+        console.warn("config listen failed — using defaults", e?.message);
+        setConfig(DEFAULT_CONFIG);
+      },
     );
   }, []);
 
