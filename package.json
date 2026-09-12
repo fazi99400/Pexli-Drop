@@ -1,0 +1,8 @@
+{
+  "name": "pexli-drop",
+  "private": true,
+  "description": "Root build entry for Cloudflare — builds the /web SPA into web/dist.",
+  "scripts": {
+    "build": "npm --prefix web install && npm --prefix web run build"
+  }
+}
