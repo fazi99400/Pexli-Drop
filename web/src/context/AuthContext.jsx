@@ -5,11 +5,32 @@ import {
   signOut,
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db, googleProvider, appleProvider } from "../firebase";
+import { auth, db, googleProvider, appleProvider, firebaseConfigured } from "../firebase";
 import { api } from "../lib/functions";
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
+
+const REF_KEY = "pexli_ref";
+// Capture ?ref=CODE as early as possible (before the router rewrites the URL)
+// and remember it until the user is signed in and we can bind it server-side.
+function captureRefFromUrl() {
+  try {
+    const code = new URLSearchParams(window.location.search).get("ref");
+    if (code) localStorage.setItem(REF_KEY, code.trim().toUpperCase());
+  } catch (e) {
+    /* storage blocked — ignore */
+  }
+}
+captureRefFromUrl();
+
+function safeRemove(k) {
+  try {
+    localStorage.removeItem(k);
+  } catch (e) {
+    /* ignore */
+  }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -27,8 +48,36 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Auth state → ensure profile exists, read admin claim.
+  // Bind a captured referral code once the user is signed in (set-once).
+  const applyPendingReferral = useCallback(async (prof) => {
+    let code;
+    try {
+      code = localStorage.getItem(REF_KEY);
+    } catch (e) {
+      code = null;
+    }
+    if (!code || prof?.referredBy || code === prof?.referralCode) {
+      if (code) safeRemove(REF_KEY);
+      return prof;
+    }
+    try {
+      await api.setReferrer({ code });
+      safeRemove(REF_KEY);
+      const res = await api.getMe();
+      return res.data;
+    } catch (e) {
+      // Invalid/self/already-set — stop retrying.
+      safeRemove(REF_KEY);
+      return prof;
+    }
+  }, []);
+
+  // Auth state → ensure profile exists, read admin claim, apply referral.
   useEffect(() => {
+    if (!firebaseConfigured) {
+      setLoading(false);
+      return undefined;
+    }
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
@@ -36,7 +85,9 @@ export function AuthProvider({ children }) {
           await api.ensureProfile();
           const token = await u.getIdTokenResult(true);
           setIsAdmin(token.claims.admin === true);
-          await refreshProfile();
+          let prof = (await api.getMe()).data;
+          prof = await applyPendingReferral(prof);
+          setProfile(prof);
         } catch (e) {
           console.warn("post-login setup failed", e?.message);
         }
@@ -46,10 +97,11 @@ export function AuthProvider({ children }) {
       }
       setLoading(false);
     });
-  }, [refreshProfile]);
+  }, [applyPendingReferral]);
 
   // Live config (task toggles / point values / locks).
   useEffect(() => {
+    if (!firebaseConfigured) return undefined;
     return onSnapshot(
       doc(db, "config", "global"),
       (snap) => snap.exists() && setConfig(snap.data()),
@@ -67,6 +119,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     config,
     loading,
+    firebaseConfigured,
     refreshProfile,
     setProfile,
     signInGoogle,

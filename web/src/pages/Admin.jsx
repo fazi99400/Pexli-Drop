@@ -121,6 +121,39 @@ function ConfigTab() {
       </div>
 
       <div className="card mt">
+        <h3 className="task-title">Referral rewards</h3>
+        <p className="subtle">Referrers earn this % of every point their invitees make.</p>
+        <div className="row">
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={!!draft.referral?.enabled}
+              onChange={(e) =>
+                setDraft({ ...draft, referral: { ...draft.referral, enabled: e.target.checked } })
+              }
+            />
+            <span>Enabled</span>
+          </label>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Percent (%)</label>
+            <input
+              className="num"
+              type="number"
+              min="0"
+              max="100"
+              value={draft.referral?.percent ?? 0}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  referral: { ...draft.referral, percent: Number(e.target.value) },
+                })
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="card mt">
         <h3 className="task-title">Requires admin approval</h3>
         <p className="subtle">Link tasks that hold points as “pending” until you approve them.</p>
         <div className="row">

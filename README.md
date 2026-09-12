@@ -42,6 +42,29 @@ firebase.json, firestore.rules, firestore.indexes.json
 
 ---
 
+## Referral system
+
+Every user gets a stable 8-char **referral code** (deterministic from their uid)
+and a share link `https://drop.pex.li/?ref=CODE`.
+
+- A visitor arriving with `?ref=CODE` has it captured to `localStorage`; after
+  they sign in, `setReferrer` binds them to the referrer **once** (no
+  self-referral, set-once, code must exist).
+- Whenever a referred user earns points, the referrer automatically earns
+  **`config.referral.percent`%** of that award. The bonus is written in the
+  **same transaction** off the same unique source id, so it's exactly-once —
+  it also fires when an admin approves a pending submission.
+- `referral` bonuses never chain (a referral row never triggers another).
+- Admin can toggle referrals on/off and change the percent live (default 10%).
+
+Referral state on the user doc: `referralCode`, `referredBy`, `referralCount`,
+`referralPointsEarned`. Reverse lookup lives in `referralCodes/{code} → uid`.
+
+## Branding
+
+Uses the owner-supplied `web/public/LogoWhite.svg` (header, hero, login) on the
+dark theme; `LogoBlack.svg` is available for any light surface.
+
 ## Anti-abuse (spec §7) — how it's enforced
 
 - **Idempotent awards**: `pointsLedger` doc id = `sha256(taskType:refId)`, created

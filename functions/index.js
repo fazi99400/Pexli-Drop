@@ -24,6 +24,7 @@ exports.onUserCreate = profile.onUserCreate;
 exports.ensureProfile = profile.ensureProfile;
 exports.getMe = profile.getMe;
 exports.setWallet = profile.setWallet;
+exports.setReferrer = profile.setReferrer;
 
 // On-chain tasks
 exports.verifyFaucet = onchain.verifyFaucet;

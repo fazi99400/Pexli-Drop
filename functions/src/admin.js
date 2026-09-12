@@ -5,7 +5,8 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const { defineSecret } = require("firebase-functions/params");
 const { admin, db, FieldValue } = require("./init");
 const { CALL_OPTS, requireAdmin } = require("./callable");
-const { CONFIG_REF, DEFAULT_CONFIG } = require("./config");
+const { CONFIG_REF, DEFAULT_CONFIG, getConfig } = require("./config");
+const { applyReferralInTx } = require("./points");
 
 const ADMIN_BOOTSTRAP_TOKEN = defineSecret("ADMIN_BOOTSTRAP_TOKEN");
 
@@ -39,6 +40,13 @@ const updateConfig = onCall(CALL_OPTS, async (request) => {
     clean.requiresApproval = {};
     for (const k of Object.keys(DEFAULT_CONFIG.requiresApproval)) {
       if (k in patch.requiresApproval) clean.requiresApproval[k] = Boolean(patch.requiresApproval[k]);
+    }
+  }
+  if (patch.referral) {
+    clean.referral = {};
+    if ("enabled" in patch.referral) clean.referral.enabled = Boolean(patch.referral.enabled);
+    if ("percent" in patch.referral) {
+      clean.referral.percent = Math.min(100, Math.max(0, Number(patch.referral.percent) || 0));
     }
   }
   await CONFIG_REF.set(clean, { merge: true });
@@ -98,18 +106,24 @@ const approveSubmission = onCall(CALL_OPTS, async (request) => {
   const id = request.data?.id;
   if (!id) throw new HttpsError("invalid-argument", "Missing ledger id.");
   const ledgerRef = db.collection("pointsLedger").doc(id);
+  const config = await getConfig();
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ledgerRef);
     if (!snap.exists) throw new HttpsError("not-found", "Submission not found.");
     const row = snap.data();
     if (row.status !== "pending") return; // idempotent
+    const userRef = db.collection("users").doc(row.uid);
+    const userSnap = await tx.get(userRef);
+    const amount = row.points || 0;
+
     tx.set(ledgerRef, { status: "final" }, { merge: true });
-    tx.set(
-      db.collection("users").doc(row.uid),
-      { points: FieldValue.increment(row.points || 0) },
-      { merge: true },
-    );
+    tx.set(userRef, { points: FieldValue.increment(amount) }, { merge: true });
+
+    // Referral bonus finalizes together with the approved submission.
+    if (userSnap.exists) {
+      applyReferralInTx(tx, { ...userSnap.data(), __uid: row.uid }, amount, id, config.referral);
+    }
   });
   return { ok: true };
 });
