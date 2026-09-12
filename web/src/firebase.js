@@ -13,14 +13,21 @@ import {
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+import { FIREBASE_CONFIG, FUNCTIONS_REGION } from "./firebase.config";
 
+// Values come from build-time env vars if set, else from src/firebase.config.js
+// (the easy, commit-your-values path — Firebase web config is not secret).
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || FIREBASE_CONFIG.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || FIREBASE_CONFIG.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || FIREBASE_CONFIG.projectId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || FIREBASE_CONFIG.appId,
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || FIREBASE_CONFIG.messagingSenderId,
 };
+
+const functionsRegion =
+  import.meta.env.VITE_FUNCTIONS_REGION || FUNCTIONS_REGION || "us-central1";
 
 // Minimum needed for the SDK to initialize meaningfully.
 export const firebaseConfigured = Boolean(
@@ -38,7 +45,7 @@ if (firebaseConfigured) {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
-  functions = getFunctions(app, import.meta.env.VITE_FUNCTIONS_REGION || "us-central1");
+  functions = getFunctions(app, functionsRegion);
 
   googleProvider = new GoogleAuthProvider();
   appleProvider = new OAuthProvider("apple.com");
