@@ -2,13 +2,15 @@
 // claim. Covers: config editing, tweet-pool upload, submission moderation,
 // user listing, CSV export, and a token-guarded first-admin bootstrap.
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/params");
+const { defineString } = require("firebase-functions/params");
 const { admin, db, FieldValue } = require("./init");
 const { CALL_OPTS, requireAdmin } = require("./callable");
 const { CONFIG_REF, DEFAULT_CONFIG, getConfig } = require("./config");
 const { applyReferralInTx } = require("./points");
 
-const ADMIN_BOOTSTRAP_TOKEN = defineSecret("ADMIN_BOOTSTRAP_TOKEN");
+// Plain param (not Secret Manager) so a first deploy never blocks on it. When
+// empty, the bootstrap endpoint is disabled (see the guard below).
+const ADMIN_BOOTSTRAP_TOKEN = defineString("ADMIN_BOOTSTRAP_TOKEN", { default: "" });
 
 // --- Config editing ---------------------------------------------------------
 // Merge-patch config/global. Only known top-level sections are accepted, and
@@ -201,12 +203,14 @@ const grantAdmin = onCall(CALL_OPTS, async (request) => {
 // Usage: POST { token, email }. Set the secret first:
 //   firebase functions:secrets:set ADMIN_BOOTSTRAP_TOKEN
 const bootstrapAdmin = onRequest(
-  { region: "us-central1", secrets: [ADMIN_BOOTSTRAP_TOKEN] },
+  { region: "us-central1" },
   async (req, res) => {
     if (req.method !== "POST") return res.status(405).send("POST only");
     const token = req.body?.token || req.query?.token;
     const email = String(req.body?.email || req.query?.email || "").trim().toLowerCase();
-    if (!token || token !== ADMIN_BOOTSTRAP_TOKEN.value()) {
+    const configured = ADMIN_BOOTSTRAP_TOKEN.value();
+    // Disabled until an admin bootstrap token is configured (never allow empty).
+    if (!configured || !token || token !== configured) {
       return res.status(403).send("forbidden");
     }
     if (!email) return res.status(400).send("missing email");

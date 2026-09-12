@@ -26,7 +26,7 @@ function makePkce() {
 // --- Connect flow -----------------------------------------------------------
 // Step 1 (callable, requires Firebase auth): mint an authorize URL and stash
 // the PKCE verifier + uid under a random state key.
-const xAuthStart = onCall({ ...CALL_OPTS, secrets: [X_SECRET] }, async (request) => {
+const xAuthStart = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   await requireTaskEnabled("follow_x"); // gate connect behind X being enabled
   const clientId = params.X_CLIENT_ID.value();
@@ -56,7 +56,7 @@ const xAuthStart = onCall({ ...CALL_OPTS, secrets: [X_SECRET] }, async (request)
 
 // Step 2 (HTTP, X redirects here): exchange code, load the X user, enforce
 // one-X-account-per-user uniqueness, persist ids + tokens, redirect to the app.
-const xCallback = onRequest({ region: "us-central1", secrets: [X_SECRET] }, async (req, res) => {
+const xCallback = onRequest({ region: "us-central1" }, async (req, res) => {
   const { code, state, error } = req.query;
   const appBase = params.X_REDIRECT_URI.value().replace(/\/x\/callback.*$/, "");
   const back = (q) => res.redirect(`${appBase}/?x=${q}`);
@@ -175,7 +175,7 @@ async function xGet(path, token) {
 }
 
 // --- Follow verification ----------------------------------------------------
-const verifyFollowX = onCall({ ...CALL_OPTS, secrets: [X_SECRET] }, async (request) => {
+const verifyFollowX = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const config = await requireTaskEnabled("follow_x");
   const { data: user } = await loadUser(uid);
@@ -252,7 +252,7 @@ const assignTweet = onCall(CALL_OPTS, async (request) => {
 });
 
 // Verify the user posted their assigned tweet, then award + start cooldown.
-const verifyTweet = onCall({ ...CALL_OPTS, secrets: [X_SECRET] }, async (request) => {
+const verifyTweet = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const config = await requireTaskEnabled("tweet");
   const { data: user } = await loadUser(uid);
