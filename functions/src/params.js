@@ -53,6 +53,12 @@ const ALLOWED_ORIGINS = defineString("ALLOWED_ORIGINS", {
   default: "https://drop.pex.li,http://localhost:5173",
 });
 
+// Comma-separated emails that are auto-granted the admin claim on sign-in, so
+// no manual bootstrap step is needed. The project owner is included by default.
+const ADMIN_EMAILS = defineString("ADMIN_EMAILS", {
+  default: "alamzapakistan@gmail.com",
+});
+
 module.exports = {
   PEXLI_RPC_URL,
   PEXLI_EXPLORER_API,
@@ -65,4 +71,5 @@ module.exports = {
   X_PEXLI_USER_ID,
   X_REDIRECT_URI,
   ALLOWED_ORIGINS,
+  ADMIN_EMAILS,
 };

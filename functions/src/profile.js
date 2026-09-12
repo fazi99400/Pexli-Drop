@@ -3,9 +3,28 @@
 const crypto = require("crypto");
 const functionsV1 = require("firebase-functions/v1");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { db, FieldValue, Timestamp } = require("./init");
+const { admin, db, FieldValue, Timestamp } = require("./init");
 const { CALL_OPTS, requireAuth, loadUser } = require("./callable");
 const { normalizeAddress, lc } = require("./chain");
+const params = require("./params");
+
+// Auto-grant the admin claim to owner emails (config ADMIN_EMAILS), so no
+// manual bootstrap is ever required. No-op if already admin or not listed.
+function adminEmailSet() {
+  return new Set(
+    params.ADMIN_EMAILS.value()
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+async function maybeGrantAdmin(uid, email, alreadyAdmin) {
+  if (alreadyAdmin) return;
+  const e = String(email || "").toLowerCase();
+  if (e && adminEmailSet().has(e)) {
+    await admin.auth().setCustomUserClaims(uid, { admin: true });
+  }
+}
 
 // Deterministic 8-char referral code from the uid → unique, stable, no collision.
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -67,6 +86,7 @@ const onUserCreate = functionsV1.auth.user().onCreate(async (user) => {
   const snap = await ref.get();
   if (!snap.exists) await ref.set(newProfile(user));
   await ensureReferralCode(user.uid);
+  await maybeGrantAdmin(user.uid, user.email, false);
 });
 
 // Idempotent client-callable fallback (emulator / edge cases).
@@ -85,6 +105,7 @@ const ensureProfile = onCall(CALL_OPTS, async (request) => {
     );
   }
   await ensureReferralCode(uid);
+  await maybeGrantAdmin(uid, request.auth.token.email, request.auth.token.admin === true);
   const fresh = await ref.get();
   return publicProfile(fresh.data());
 });
