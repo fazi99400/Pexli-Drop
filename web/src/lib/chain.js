@@ -12,6 +12,10 @@ export const PEXLI_CHAIN = {
   blockExplorerUrls: [explorer].filter(Boolean),
 };
 
+// Address the "send a transaction" task asks users to send PEX to (the Pexli
+// faucet EOA). Shown on the tx card so users know the destination.
+export const TX_TARGET_ADDRESS = "0x0ACf5276dc2b0863E91e27CB48e39bA3EF135Abf";
+
 export const LINKS = {
   main: "https://pex.li",
   drop: "https://drop.pex.li",

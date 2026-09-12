@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api, errMessage } from "../lib/functions";
 import { connectWallet, addPexliNetwork } from "../lib/wallet";
-import { LINKS } from "../lib/chain";
+import { LINKS, TX_TARGET_ADDRESS } from "../lib/chain";
 import TaskCard from "../components/TaskCard";
 
 export default function Dashboard() {
@@ -118,18 +118,20 @@ export default function Dashboard() {
         </TaskCard>
 
         <TaskCard
-          title="Send a transaction"
-          desc="Do at least one on-chain transaction. Repeats every hour."
+          title="Send PEX"
+          desc="Send any amount of PEX from your wallet to the Pexli address below, then verify. Repeats every hour."
           points={P.tx}
           icon="⚡"
           cat="chain"
           enabled={T.tx}
-          buttonLabel="Verify transaction"
+          buttonLabel="I sent — verify"
           disabled={!hasWallet}
           disabledNote="Save your wallet first"
           action={async () => (await api.verifyTx()).data}
           onDone={done}
-        />
+        >
+          <CopyAddress address={TX_TARGET_ADDRESS} />
+        </TaskCard>
       </div>
 
       {/* --- Follows --- */}
@@ -257,6 +259,28 @@ function SectionHead({ title }) {
   return (
     <div className="section-head">
       <h2 className="section-title">{title}</h2>
+    </div>
+  );
+}
+
+// Small copyable address chip (used by the "Send PEX" task).
+function CopyAddress({ address }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      /* clipboard blocked */
+    }
+  }
+  return (
+    <div className="ref-code-box">
+      <span className="mono" style={{ flex: 1, minWidth: 140, wordBreak: "break-all" }}>{address}</span>
+      <button className="btn btn-sm" onClick={copy}>
+        {copied ? "Copied ✓" : "Copy"}
+      </button>
     </div>
   );
 }

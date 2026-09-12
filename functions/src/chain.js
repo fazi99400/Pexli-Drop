@@ -90,14 +90,16 @@ async function findIncomingFrom(address, fromAddr, sinceBlock = 0) {
   return null;
 }
 
-// Did `address` SEND a tx TO `toAddr` (e.g. the DEX router) after block cursor?
+// Did `address` SEND a tx TO `toAddr` after block cursor? When requireValue is
+// true, the tx must move a positive native amount (used by the "send PEX" task);
+// left false it matches any tx to the address (used by the swap/router task).
 // Returns the matching tx {hash, blockNumber} or null.
-async function findOutgoingTo(address, toAddr, sinceBlock = 0) {
+async function findOutgoingTo(address, toAddr, sinceBlock = 0, requireValue = false) {
   const txs = await explorerTxList(address, sinceBlock);
   if (txs === null) {
     throw new HttpsError(
       "failed-precondition",
-      "Swap verification needs PEXLI_EXPLORER_API configured.",
+      "On-chain verification needs PEXLI_EXPLORER_API configured.",
     );
   }
   const from = lc(address);
@@ -107,7 +109,8 @@ async function findOutgoingTo(address, toAddr, sinceBlock = 0) {
       lc(t.from) === from &&
       lc(t.to) === to &&
       Number(t.blockNumber) > Number(sinceBlock) &&
-      (t.isError === "0" || t.isError === undefined)
+      (t.isError === "0" || t.isError === undefined) &&
+      (!requireValue || BigInt(t.value || "0") > 0n)
     ) {
       return { hash: t.hash, blockNumber: Number(t.blockNumber) };
     }

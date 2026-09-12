@@ -21,8 +21,16 @@ const PEXLI_EXPLORER_API = defineString("PEXLI_EXPLORER_API", {
 const PEXLI_CHAIN_ID = defineString("PEXLI_CHAIN_ID", { default: "78901" });
 
 // On-chain task target addresses (lowercased for comparison).
-// FAUCET_ADDRESS still to be supplied by the owner for the faucet task.
-const FAUCET_ADDRESS = defineString("FAUCET_ADDRESS", { default: "" });
+// The Pexli faucet is a normal account (EOA) that dispenses native PEX.
+// Faucet claim = user RECEIVES from it; tx task = user SENDS to it.
+const FAUCET_ADDRESS = defineString("FAUCET_ADDRESS", {
+  default: "0x0ACf5276dc2b0863E91e27CB48e39bA3EF135Abf",
+});
+// Destination the "send a transaction" task requires PEX to be sent to
+// (defaults to the faucet address per the owner's spec).
+const TX_TARGET_ADDRESS = defineString("TX_TARGET_ADDRESS", {
+  default: "0x0ACf5276dc2b0863E91e27CB48e39bA3EF135Abf",
+});
 const DEX_ROUTER_ADDRESS = defineString("DEX_ROUTER_ADDRESS", {
   default: "0x596b93967Cc18539795437A17E689e775c2CCE93",
 });
@@ -50,6 +58,7 @@ module.exports = {
   PEXLI_EXPLORER_API,
   PEXLI_CHAIN_ID,
   FAUCET_ADDRESS,
+  TX_TARGET_ADDRESS,
   DEX_ROUTER_ADDRESS,
   X_CLIENT_ID,
   X_CLIENT_SECRET,
