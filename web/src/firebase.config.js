@@ -15,11 +15,11 @@
 //
 //  (Advanced: VITE_FIREBASE_* env vars, if set at build time, override these.)
 export const FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "", // e.g. your-project.firebaseapp.com
-  projectId: "",
-  appId: "",
-  messagingSenderId: "",
+  apiKey: "AIzaSyB0ftO8g-e70xMBFTndsaJdy78qWx2AEHA",
+  authDomain: "pexli-drop.firebaseapp.com",
+  projectId: "pexli-drop",
+  appId: "1:632066138675:web:2a2cb9470b1dbb0e9f7946",
+  messagingSenderId: "632066138675",
 };
 
 // Cloud Functions region (leave as-is unless you deployed functions elsewhere).
