@@ -5,7 +5,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db, googleProvider, appleProvider } from "../firebase";
+import { auth, db, googleProvider, appleProvider, firebaseConfigured } from "../firebase";
 import { api } from "../lib/functions";
 
 const AuthCtx = createContext(null);
@@ -74,6 +74,10 @@ export function AuthProvider({ children }) {
 
   // Auth state → ensure profile exists, read admin claim, apply referral.
   useEffect(() => {
+    if (!firebaseConfigured) {
+      setLoading(false);
+      return undefined;
+    }
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
@@ -97,6 +101,7 @@ export function AuthProvider({ children }) {
 
   // Live config (task toggles / point values / locks).
   useEffect(() => {
+    if (!firebaseConfigured) return undefined;
     return onSnapshot(
       doc(db, "config", "global"),
       (snap) => snap.exists() && setConfig(snap.data()),
@@ -114,6 +119,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     config,
     loading,
+    firebaseConfigured,
     refreshProfile,
     setProfile,
     signInGoogle,
