@@ -1,10 +1,14 @@
 # Cloudflare Worker (static assets) config for the Pexli airdrop SPA.
 #
-# This makes a *.workers.dev deploy serve the built Vite site from web/dist and
-# fall back to index.html for client-side routes (so /admin etc. don't 404).
-# The Worker name must match your worker subdomain: <name>.<subdomain>.workers.dev
+# The [build] command builds the Vite site into web/dist BEFORE wrangler
+# uploads assets — so it works even if the Cloudflare dashboard has no build
+# command set. [assets] then serves web/dist with SPA fallback (so /admin etc.
+# don't 404).
 name = "pexli-drop"
 compatibility_date = "2024-11-01"
+
+[build]
+command = "npm run build"
 
 [assets]
 directory = "./web/dist"
