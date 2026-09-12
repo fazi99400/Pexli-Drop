@@ -1,0 +1,5 @@
+{
+  "projects": {
+    "default": "<<FILL_IN — your Firebase project id, e.g. pexli-airdrop>>"
+  }
+}
