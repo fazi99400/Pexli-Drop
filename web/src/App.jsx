@@ -15,20 +15,21 @@ function SetupScreen() {
         <img className="brand-logo" src="/LogoWhite.svg" alt="Pexli" style={{ height: 30, marginBottom: 14 }} />
         <h2 className="section-title" style={{ marginTop: 0 }}>Almost there — add your Firebase config</h2>
         <p className="subtle">
-          The app loaded fine, but no Firebase web config was found, so sign-in is disabled. Set
-          these environment variables on your host (Cloudflare Pages → Settings → Environment
-          variables), then redeploy:
+          The app loaded fine, but no Firebase web config was found, so sign-in is disabled. Open
+          this file in the repo and fill in your 5 values, then commit — Cloudflare rebuilds
+          automatically (no host variables needed):
         </p>
         <pre className="mono" style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, overflowX: "auto" }}>
-{`VITE_FIREBASE_API_KEY=…
-VITE_FIREBASE_AUTH_DOMAIN=…
-VITE_FIREBASE_PROJECT_ID=…
-VITE_FIREBASE_APP_ID=…
-VITE_FIREBASE_MESSAGING_SENDER_ID=…`}
+{`web/src/firebase.config.js
+
+apiKey: "…"
+authDomain: "your-project.firebaseapp.com"
+projectId: "…"
+appId: "…"
+messagingSenderId: "…"`}
         </pre>
         <p className="subtle">
-          Values come from Firebase console → Project settings → Your apps. For local dev, copy
-          <span className="mono"> web/.env.example </span> to <span className="mono">web/.env</span>.
+          Values come from Firebase console → ⚙ Project settings → General → Your apps → Web app.
         </p>
       </div>
     </div>
