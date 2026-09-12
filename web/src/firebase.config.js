@@ -25,7 +25,6 @@ export const FIREBASE_CONFIG = {
 // Cloud Functions region (leave as-is unless you deployed functions elsewhere).
 export const FUNCTIONS_REGION = "us-central1";
 
-// Pexli chain (optional now; needed for wallet auto-add + explorer links).
-// Copy from https://chainlist.org/chain/78901
-export const PEXLI_RPC_URL = "";
-export const PEXLI_EXPLORER_URL = "";
+// Pexli chain (used for wallet auto-add network + explorer links).
+export const PEXLI_RPC_URL = "https://testrpc.pex.li";
+export const PEXLI_EXPLORER_URL = "https://explorer.pex.li";

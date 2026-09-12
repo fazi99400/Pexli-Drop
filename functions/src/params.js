@@ -13,13 +13,19 @@ const { defineString, defineSecret } = require("firebase-functions/params");
 // --- Chain (non-secret) -----------------------------------------------------
 // Pexli is EVM-compatible. Chain id 78901 (0x13435). Copy the RPC + explorer
 // from https://chainlist.org/chain/78901.
-const PEXLI_RPC_URL = defineString("PEXLI_RPC_URL", { default: "" });
-const PEXLI_EXPLORER_API = defineString("PEXLI_EXPLORER_API", { default: "" });
+const PEXLI_RPC_URL = defineString("PEXLI_RPC_URL", { default: "https://testrpc.pex.li" });
+// Blockscout/Etherscan-style API base (the code appends ?module=account&...).
+const PEXLI_EXPLORER_API = defineString("PEXLI_EXPLORER_API", {
+  default: "https://explorer.pex.li/api",
+});
 const PEXLI_CHAIN_ID = defineString("PEXLI_CHAIN_ID", { default: "78901" });
 
 // On-chain task target addresses (lowercased for comparison).
+// FAUCET_ADDRESS still to be supplied by the owner for the faucet task.
 const FAUCET_ADDRESS = defineString("FAUCET_ADDRESS", { default: "" });
-const DEX_ROUTER_ADDRESS = defineString("DEX_ROUTER_ADDRESS", { default: "" });
+const DEX_ROUTER_ADDRESS = defineString("DEX_ROUTER_ADDRESS", {
+  default: "0x596b93967Cc18539795437A17E689e775c2CCE93",
+});
 
 // --- X / Twitter OAuth 2.0 --------------------------------------------------
 const X_CLIENT_ID = defineString("X_CLIENT_ID", { default: "" });
