@@ -7,7 +7,7 @@ const { CALL_OPTS, requireAuth, loadUser, requireTaskEnabled } = require("../cal
 const { awardPoints } = require("../points");
 const chain = require("../chain");
 const params = require("../params");
-const { hoursSince, lc: _lc } = require("../util");
+const { hoursSince } = require("../util");
 
 function requireWallet(user) {
   if (!user.walletAddress) {
@@ -98,6 +98,9 @@ const verifySwap = onCall(CALL_OPTS, async (request) => {
 // --- Periodic transaction (>= 1 per hour) -----------------------------------
 // Nonce-based: cheap, RPC-only, no explorer needed. If the outbound tx count
 // grew since we last stored it, the user made at least one new transaction.
+// Task: the user sends PEX from their wallet TO the Pexli address (the faucet
+// EOA by default). Verified via the explorer as an outbound tx to that address
+// with a positive value, since the stored cursor. Repeats hourly.
 const verifyTx = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const config = await requireTaskEnabled("tx");
@@ -105,29 +108,30 @@ const verifyTx = onCall(CALL_OPTS, async (request) => {
   const wallet = requireWallet(user);
   requireCooldown(user.lastTxAt, config.locks.txHrs, "Transaction reward");
 
-  const nonce = await chain.getNonce(wallet);
-  const cursor = user.txNonceCursor;
-  if (cursor !== null && cursor !== undefined && nonce <= cursor) {
+  const target = params.TX_TARGET_ADDRESS.value();
+  if (!target) {
+    throw new HttpsError("failed-precondition", "Transaction target not configured yet.");
+  }
+  const sinceBlock = user.lastCheckedBlock || 0;
+  const match = await chain.findOutgoingTo(wallet, target, sinceBlock, true);
+  if (!match) {
     throw new HttpsError(
       "not-found",
-      "No new transaction since your last reward. Send a tx, then verify.",
+      "No new PEX transfer to the Pexli address found. Send PEX to it, then verify.",
     );
-  }
-  if (nonce === 0) {
-    throw new HttpsError("not-found", "This wallet has made no transactions yet.");
   }
 
   const result = await awardPoints({
     uid,
     taskType: "tx",
     points: config.points.tx,
-    refId: `${_lc(wallet)}:tx:${nonce}`,
+    refId: match.hash,
     userUpdates: {
       lastTxAt: Timestamp.now(),
-      txNonceCursor: nonce,
+      lastCheckedBlock: Math.max(sinceBlock, match.blockNumber),
     },
   });
-  return { ok: true, ...result, nonce };
+  return { ok: true, ...result, txHash: match.hash };
 });
 
 module.exports = { verifyFaucet, verifySwap, verifyTx };
