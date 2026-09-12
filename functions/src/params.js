@@ -8,7 +8,7 @@
 //   firebase functions:secrets:set X_CLIENT_SECRET
 //   firebase deploy --only functions
 // or via .env files in this folder for the emulator (see .env.example).
-const { defineString, defineSecret } = require("firebase-functions/params");
+const { defineString } = require("firebase-functions/params");
 
 // --- Chain (non-secret) -----------------------------------------------------
 // Pexli is EVM-compatible. Chain id 78901 (0x13435). Copy the RPC + explorer
@@ -29,7 +29,9 @@ const DEX_ROUTER_ADDRESS = defineString("DEX_ROUTER_ADDRESS", {
 
 // --- X / Twitter OAuth 2.0 --------------------------------------------------
 const X_CLIENT_ID = defineString("X_CLIENT_ID", { default: "" });
-const X_CLIENT_SECRET = defineSecret("X_CLIENT_SECRET");
+// Plain param (not Secret Manager) so a first deploy never blocks on it; set a
+// real value later when enabling X tasks. Empty = X tasks simply don't work.
+const X_CLIENT_SECRET = defineString("X_CLIENT_SECRET", { default: "" });
 // Public numeric id of the Pexli account users must follow (@PexliLabs).
 const X_PEXLI_USER_ID = defineString("X_PEXLI_USER_ID", { default: "" });
 // Where X redirects back after OAuth (must match the app settings).
