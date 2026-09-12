@@ -3,7 +3,9 @@ node_modules/
 */node_modules/
 
 # Build output
-web/dist/
+# NOTE: web/dist is intentionally COMMITTED so the Cloudflare Worker can serve
+# it directly (its build pipeline runs install + `wrangler deploy` with no build
+# step). Rebuild with `npm run build` and commit the result after code changes.
 web/.vite/
 
 # Environment / secrets — NEVER commit
