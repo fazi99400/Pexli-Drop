@@ -45,6 +45,12 @@ const DEFAULT_CONFIG = {
     instagram: false,
     review: false,
   },
+  // Referral rewards: the referrer earns `percent`% of every point their
+  // referred users earn (spec addition). Editable in admin.
+  referral: {
+    enabled: true,
+    percent: 10,
+  },
 };
 
 const CONFIG_REF = db.collection("config").doc("global");
@@ -66,6 +72,7 @@ async function getConfig() {
       ...DEFAULT_CONFIG.requiresApproval,
       ...(data.requiresApproval || {}),
     },
+    referral: { ...DEFAULT_CONFIG.referral, ...(data.referral || {}) },
   };
 }
 

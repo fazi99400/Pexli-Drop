@@ -8,16 +8,16 @@ export default function Header() {
   return (
     <header className="header">
       <div className="container header-inner">
-        <Link to="/" className="brand" style={{ textDecoration: "none" }}>
-          {/* Owner: drop pexli-logo.svg into /web/public and swap this mark for an <img>. */}
-          <span className="brand-mark">P</span>
-          <span>Pexli&nbsp;Drop</span>
+        <Link to="/" className="brand">
+          <img src="/LogoWhite.svg" alt="Pexli" />
+          <span className="sub">Drop</span>
         </Link>
 
         <div className="row">
           {user && (
             <span className="points-pill">
-              <b>{profile?.points ?? 0}</b> pts
+              <span className="dot" />
+              <b>{(profile?.points ?? 0).toLocaleString()}</b> pts
             </span>
           )}
           {isAdmin && (

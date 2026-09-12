@@ -9,6 +9,7 @@ export const api = {
   ensureProfile: call("ensureProfile"),
   getMe: call("getMe"),
   setWallet: call("setWallet"),
+  setReferrer: call("setReferrer"),
 
   verifyFaucet: call("verifyFaucet"),
   verifySwap: call("verifySwap"),

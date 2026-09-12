@@ -1,10 +1,24 @@
 // User profile lifecycle: create on sign-up, expose "me", save wallet with
-// server-enforced uniqueness (one wallet per user, anti multi-account).
+// server-enforced uniqueness (one wallet per user), and the referral binding.
+const crypto = require("crypto");
 const functionsV1 = require("firebase-functions/v1");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { db, FieldValue, Timestamp } = require("./init");
 const { CALL_OPTS, requireAuth, loadUser } = require("./callable");
 const { normalizeAddress, lc } = require("./chain");
+
+// Deterministic 8-char referral code from the uid → unique, stable, no collision.
+const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+function referralCodeFor(uid) {
+  const bytes = crypto.createHash("sha256").update(uid).digest().subarray(0, 5); // 40 bits
+  let bits = 0n;
+  for (const b of bytes) bits = (bits << 8n) | BigInt(b);
+  let out = "";
+  for (let i = 0; i < 8; i++) {
+    out = B32[Number((bits >> BigInt(5 * i)) & 31n)] + out;
+  }
+  return out;
+}
 
 // Canonical profile document. Kept tiny: text + numbers + timestamps only.
 function newProfile(user) {
@@ -24,6 +38,11 @@ function newProfile(user) {
     lastTweetTaskAt: null,
     lastCheckedBlock: null,
     txNonceCursor: null,
+    // Referral fields
+    referralCode: referralCodeFor(user.uid),
+    referredBy: null,
+    referralCount: 0,
+    referralPointsEarned: 0,
   };
 }
 
@@ -35,18 +54,22 @@ function providerKey(providerId) {
   return providerId;
 }
 
-// v1 auth trigger — fires once when Firebase Auth creates the account. This is
-// the canonical create path (works with standard Firebase Auth, no GCIP upgrade).
+// Reverse index code → uid, so setReferrer can resolve a pasted code cheaply.
+async function ensureReferralCode(uid) {
+  const code = referralCodeFor(uid);
+  await db.collection("referralCodes").doc(code).set({ uid }, { merge: true });
+  return code;
+}
+
+// v1 auth trigger — canonical create path (standard Firebase Auth, no GCIP).
 const onUserCreate = functionsV1.auth.user().onCreate(async (user) => {
   const ref = db.collection("users").doc(user.uid);
   const snap = await ref.get();
-  if (!snap.exists) {
-    await ref.set(newProfile(user));
-  }
+  if (!snap.exists) await ref.set(newProfile(user));
+  await ensureReferralCode(user.uid);
 });
 
-// Idempotent client-callable fallback (covers emulator + any edge where the
-// trigger didn't run). Never overwrites an existing profile.
+// Idempotent client-callable fallback (emulator / edge cases).
 const ensureProfile = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const ref = db.collection("users").doc(uid);
@@ -61,6 +84,7 @@ const ensureProfile = onCall(CALL_OPTS, async (request) => {
       }),
     );
   }
+  await ensureReferralCode(uid);
   const fresh = await ref.get();
   return publicProfile(fresh.data());
 });
@@ -72,8 +96,36 @@ const getMe = onCall(CALL_OPTS, async (request) => {
   return publicProfile(data);
 });
 
-// Save / update the caller's wallet address. Enforces global uniqueness so one
-// address can back only one account (§4). Uses a walletIndex doc as a lock.
+// Bind the caller to a referrer via referral code. Set-once, no self-referral.
+const setReferrer = onCall(CALL_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const code = String(request.data?.code || "").trim().toUpperCase();
+  if (!code) throw new HttpsError("invalid-argument", "Missing referral code.");
+
+  const codeSnap = await db.collection("referralCodes").doc(code).get();
+  if (!codeSnap.exists) throw new HttpsError("not-found", "That referral code doesn't exist.");
+  const referrerUid = codeSnap.data().uid;
+  if (referrerUid === uid) {
+    throw new HttpsError("failed-precondition", "You can't refer yourself.");
+  }
+
+  const userRef = db.collection("users").doc(uid);
+  const referrerRef = db.collection("users").doc(referrerUid);
+  const result = await db.runTransaction(async (tx) => {
+    const [userSnap, referrerSnap] = await Promise.all([tx.get(userRef), tx.get(referrerRef)]);
+    if (!userSnap.exists) throw new HttpsError("failed-precondition", "Complete sign-in first.");
+    if (!referrerSnap.exists) throw new HttpsError("not-found", "Referrer not found.");
+    if (userSnap.data().referredBy) {
+      throw new HttpsError("already-exists", "You already have a referrer set.");
+    }
+    tx.set(userRef, { referredBy: referrerUid }, { merge: true });
+    tx.set(referrerRef, { referralCount: FieldValue.increment(1) }, { merge: true });
+    return { ok: true };
+  });
+  return result;
+});
+
+// Save / update wallet address. Enforces global uniqueness (one wallet/user).
 const setWallet = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const checksummed = normalizeAddress(request.data?.walletAddress);
@@ -84,15 +136,9 @@ const setWallet = onCall(CALL_OPTS, async (request) => {
   await db.runTransaction(async (tx) => {
     const [idxSnap, userSnap] = await Promise.all([tx.get(indexRef), tx.get(userRef)]);
     if (idxSnap.exists && idxSnap.data().uid !== uid) {
-      throw new HttpsError(
-        "already-exists",
-        "That wallet address is already linked to another account.",
-      );
+      throw new HttpsError("already-exists", "That wallet address is already linked to another account.");
     }
-    if (!userSnap.exists) {
-      throw new HttpsError("failed-precondition", "Complete sign-in first.");
-    }
-    // Release a previously-claimed address by this user, if different.
+    if (!userSnap.exists) throw new HttpsError("failed-precondition", "Complete sign-in first.");
     const prev = userSnap.data().walletAddress;
     if (prev && lc(prev) !== lower) {
       tx.delete(db.collection("walletIndex").doc(lc(prev)));
@@ -119,7 +165,11 @@ function publicProfile(d = {}) {
     lastSwapAt: d.lastSwapAt || null,
     lastTxAt: d.lastTxAt || null,
     lastTweetTaskAt: d.lastTweetTaskAt || null,
+    referralCode: d.referralCode || null,
+    referredBy: d.referredBy || null,
+    referralCount: d.referralCount || 0,
+    referralPointsEarned: d.referralPointsEarned || 0,
   };
 }
 
-module.exports = { onUserCreate, ensureProfile, getMe, setWallet, publicProfile };
+module.exports = { onUserCreate, ensureProfile, getMe, setReferrer, setWallet, publicProfile };
