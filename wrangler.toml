@@ -6,6 +6,7 @@
 # don't 404).
 name = "pexli-drop"
 compatibility_date = "2024-11-01"
+# deploy trigger: web/dist is committed; wrangler deploy serves it directly.
 
 [build]
 command = "npm run build"
