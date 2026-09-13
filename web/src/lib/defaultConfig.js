@@ -32,6 +32,7 @@ export const DEFAULT_CONFIG = {
   locks: { swapHrs: 12, faucetHrs: 24, txHrs: 1, tweetMins: 30 },
   requiresApproval: { medium: true, youtube: true, tiktok: false, instagram: false, review: false },
   referral: { enabled: true, percent: 10 },
+  faucet: { amountPex: "0.05" },
   autoApproveFollows: true,
   leaderboard: {
     enabled: true,

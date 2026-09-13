@@ -7,6 +7,8 @@ import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Activate from "./pages/Activate";
 import Settings from "./pages/Settings";
+import WalletPage from "./pages/Wallet";
+import WalletSecurity from "./pages/WalletSecurity";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import { LINKS } from "./lib/chain";
@@ -114,11 +116,13 @@ export default function App() {
           <Route path="/" element={<MainRoutes />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/wallet-security" element={<WalletSecurity />} />
           <Route
             path="/activate"
             element={!user ? <Login /> : isActive ? <Navigate to="/" replace /> : <Activate />}
           />
           <Route path="/settings" element={user ? <Settings /> : <Login />} />
+          <Route path="/wallet" element={user ? <WalletPage /> : <Login />} />
           <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -133,6 +137,7 @@ export default function App() {
               <a href={LINKS.x}>X</a>
               <Link to="/terms">Terms</Link>
               <Link to="/privacy">Privacy</Link>
+              <Link to="/wallet-security">Wallet Security</Link>
             </div>
             <span className="subtle">Pexli Airdrop · points convert to mainnet PEX</span>
           </div>

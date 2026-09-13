@@ -35,6 +35,12 @@ const DEX_ROUTER_ADDRESS = defineString("DEX_ROUTER_ADDRESS", {
   default: "0x596b93967Cc18539795437A17E689e775c2CCE93",
 });
 
+// Private key of the faucet account (the EOA at FAUCET_ADDRESS) used by the
+// in-app faucet to SEND native PEX to users. SECRET — never commit a real
+// value; it is injected at deploy from the GitHub Actions secret
+// FAUCET_PRIVATE_KEY. Empty = the in-app faucet stays disabled.
+const FAUCET_PRIVATE_KEY = defineString("FAUCET_PRIVATE_KEY", { default: "" });
+
 // --- X / Twitter OAuth 2.0 --------------------------------------------------
 const X_CLIENT_ID = defineString("X_CLIENT_ID", { default: "" });
 // Plain param (not Secret Manager) so a first deploy never blocks on it; set a
@@ -70,6 +76,7 @@ module.exports = {
   FAUCET_ADDRESS,
   TX_TARGET_ADDRESS,
   DEX_ROUTER_ADDRESS,
+  FAUCET_PRIVATE_KEY,
   X_CLIENT_ID,
   X_CLIENT_SECRET,
   X_PEXLI_USER_ID,

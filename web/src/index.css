@@ -322,3 +322,49 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; opacity: .8;
 }
 .x-banner-close:hover { opacity: 1; }
+
+/* ---- In-app wallet ---- */
+.badge:not(.on):not(.off):not(.pending) { background: var(--bg-elev); color: var(--muted); border: 1px solid var(--border); }
+.wl-tabs { display: flex; gap: 6px; margin: 6px 0 12px; }
+.wl-tabs.sm { margin: 0 0 8px; }
+.wl-tab {
+  flex: 1; padding: 8px 10px; border-radius: 10px; font-weight: 700; font-size: 13.5px;
+  background: var(--bg-elev); border: 1px solid var(--border); color: var(--muted); cursor: pointer;
+}
+.wl-tab.on { background: rgba(198,242,78,.12); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.wl-field { display: flex; flex-direction: column; gap: 5px; }
+.wl-label { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.wl-field textarea.task-input { resize: vertical; font-family: ui-monospace, Menlo, monospace; }
+.wl-select { cursor: pointer; min-width: 96px; }
+.wl-warn {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.45; font-weight: 600;
+  color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent); border-radius: 10px; padding: 10px 12px;
+}
+.wl-seed {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px;
+}
+.wl-word { font-size: 13px; color: var(--text); }
+.wl-word b { color: var(--faint); font-weight: 600; margin-right: 4px; font-size: 11px; }
+.wl-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.wl-check input { width: 16px; height: 16px; }
+.wl-sep { height: 1px; background: var(--border-soft); margin: 14px 0; }
+
+/* ---- Swap ---- */
+.swap-row { display: flex; gap: 8px; }
+.swap-row .task-input:first-child { flex: 1; }
+.swap-flip { text-align: center; margin: 6px 0; }
+
+/* ---- Doc pages (Terms / Privacy / Wallet Security) ---- */
+.doc { padding: 8px 0 40px; line-height: 1.6; }
+.doc h1 { font-size: clamp(24px, 4vw, 34px); display: flex; align-items: center; gap: 10px; }
+.doc h1 svg { color: var(--accent); }
+.doc h2 { font-size: 18px; margin-top: 24px; }
+.doc p, .doc li { color: var(--muted); font-size: 14.5px; }
+.doc b { color: var(--text); }
+.doc ul { padding-left: 20px; }
+.doc li { margin: 6px 0; }
+@media (max-width: 420px) {
+  .wl-seed { grid-template-columns: repeat(2, 1fr); }
+}

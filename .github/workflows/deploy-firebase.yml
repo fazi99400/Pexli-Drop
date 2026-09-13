@@ -65,6 +65,21 @@ jobs:
             echo "No X_CLIENT_SECRET secret set — skipping (public-client / PKCE mode)."
           fi
 
+      # Inject the faucet signer key from a GitHub secret so the real key never
+      # lives in the repo. Empty secret = the in-app faucet stays disabled.
+      - name: Inject FAUCET_PRIVATE_KEY (if set)
+        env:
+          FAUCET_PRIVATE_KEY: ${{ secrets.FAUCET_PRIVATE_KEY }}
+        run: |
+          if [ -n "$FAUCET_PRIVATE_KEY" ]; then
+            grep -v '^FAUCET_PRIVATE_KEY=' functions/.env > functions/.env.tmp || true
+            printf 'FAUCET_PRIVATE_KEY=%s\n' "$FAUCET_PRIVATE_KEY" >> functions/.env.tmp
+            mv functions/.env.tmp functions/.env
+            echo "FAUCET_PRIVATE_KEY injected into functions/.env"
+          else
+            echo "No FAUCET_PRIVATE_KEY secret set — skipping (in-app faucet disabled)."
+          fi
+
       # Every failed deploy leaves behind a non-serving Cloud Run revision that
       # still reserves CPU against the project/region quota. After a few failures
       # these orphans pile up and exhaust "total allowable CPU per project per

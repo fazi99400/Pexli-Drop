@@ -13,6 +13,7 @@ export const api = {
   getLeaderboard: call("getLeaderboard"),
 
   verifyFaucet: call("verifyFaucet"),
+  claimFaucet: call("claimFaucet"),
   verifySwap: call("verifySwap"),
   verifyTx: call("verifyTx"),
 

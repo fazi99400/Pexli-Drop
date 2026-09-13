@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, errMessage } from "../lib/functions";
-import { LINKS, TX_TARGET_ADDRESS } from "../lib/chain";
+import { LINKS } from "../lib/chain";
 import TaskCard from "../components/TaskCard";
 import Leaderboard from "../components/Leaderboard";
 import Icon from "../components/Icon";
@@ -20,7 +21,6 @@ export default function Dashboard() {
   const T = config.tasks || {};
   const P = config.points || {};
   const R = config.referral || { enabled: false, percent: 0 };
-  const hasWallet = !!profile?.walletAddress;
   const hasX = !!profile?.xHandle;
   const hasIG = !!profile?.igHandle;
   const done = () => refreshProfile();
@@ -59,55 +59,19 @@ export default function Dashboard() {
 
       <Leaderboard />
 
-      <SectionHead title="On-chain quests" />
-      <div className="grid">
-        <TaskCard
-          title="Claim the faucet"
-          desc="Claim test PEX from the faucet to your connected wallet."
-          points={P.faucet}
-          icon="faucet"
-          cat="chain"
-          enabled={T.faucet}
-          buttonLabel="I claimed — verify"
-          disabled={!hasWallet}
-          disabledNote="Save your wallet first"
-          action={async () => (await api.verifyFaucet()).data}
-          onDone={done}
-        >
-          <LinkOut href={LINKS.faucet}>Open faucet</LinkOut>
-        </TaskCard>
-
-        <TaskCard
-          title="Swap on Lifelox"
-          desc="Make any token swap on the Lifelox DEX. Repeats every 12h."
-          points={P.swap}
-          icon="swap"
-          cat="chain"
-          enabled={T.swap}
-          buttonLabel="I swapped — verify"
-          disabled={!hasWallet}
-          disabledNote="Save your wallet first"
-          action={async () => (await api.verifySwap()).data}
-          onDone={done}
-        >
-          <LinkOut href={LINKS.dex}>Open Lifelox</LinkOut>
-        </TaskCard>
-
-        <TaskCard
-          title="Send PEX"
-          desc="Send any amount of PEX from your wallet to the Pexli address below. Repeats hourly."
-          points={P.tx}
-          icon="send"
-          cat="chain"
-          enabled={T.tx}
-          buttonLabel="I sent — verify"
-          disabled={!hasWallet}
-          disabledNote="Save your wallet first"
-          action={async () => (await api.verifyTx()).data}
-          onDone={done}
-        >
-          <CopyRow value={TX_TARGET_ADDRESS} />
-        </TaskCard>
+      <SectionHead title="Your Pexli wallet" />
+      <div className="panel wallet-hub">
+        <div className="row spread">
+          <h3 className="card-title"><Icon name="wallet" /> Faucet, swap &amp; send — all in-app</h3>
+          <span className="badge">+{P.faucet} pts</span>
+        </div>
+        <p className="task-desc">
+          Claim <b>{(config.faucet?.amountPex) || "0.05"} PEX</b> from the faucet in one click, swap tokens,
+          and send PEX — right inside your own non-custodial wallet. No external site, no browser extension.
+        </p>
+        <Link className="btn btn-primary" to="/wallet">
+          <Icon name="wallet" size={16} /> Open my wallet
+        </Link>
       </div>
 
       <SectionHead title="Follow us" />

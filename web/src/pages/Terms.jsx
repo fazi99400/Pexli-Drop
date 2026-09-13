@@ -32,10 +32,14 @@ export default function Terms() {
         and any attempt to game verification are prohibited and may result in disqualification.
       </p>
 
-      <h3>5. On-chain actions</h3>
+      <h3>5. Your wallet &amp; on-chain actions</h3>
       <p>
-        You are solely responsible for transactions you make from your wallet (faucet, swaps,
-        transfers). Blockchain transactions are irreversible; Pexli is not liable for losses.
+        The in-app wallet is <b>non-custodial</b>: your recovery phrase and keys stay encrypted in
+        your own browser and never reach our servers. <b>You alone</b> are responsible for backing up
+        your recovery phrase and safeguarding your password — if you lose them, no one, including
+        Pexli, can recover your wallet or funds. You are solely responsible for transactions you make
+        (faucet, swaps, transfers); blockchain transactions are irreversible and Pexli is not liable
+        for losses. See <Link to="/wallet-security">Wallet Security</Link>.
       </p>
 
       <h3>6. No warranty</h3>
