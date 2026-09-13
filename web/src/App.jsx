@@ -1,9 +1,13 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Link } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import Header from "./components/Header";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
+import Activate from "./pages/Activate";
+import Settings from "./pages/Settings";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import { LINKS } from "./lib/chain";
 
 // Shown when the build has no Firebase env config — prevents the blank page and
@@ -37,7 +41,7 @@ messagingSenderId: "…"`}
 }
 
 export default function App() {
-  const { user, isAdmin, loading, firebaseConfigured } = useAuth();
+  const { user, isAdmin, isActive, loading, firebaseConfigured } = useAuth();
 
   if (!firebaseConfigured) return <SetupScreen />;
 
@@ -49,16 +53,28 @@ export default function App() {
     );
   }
 
+  // The main app area, gated by sign-in + activation. Terms/Privacy are always
+  // public; Settings/Activate are reachable while signed in.
+  function MainRoutes() {
+    if (!user) return <Login />;
+    if (!isActive) return <Navigate to="/activate" replace />;
+    return <Dashboard />;
+  }
+
   return (
     <>
       <Header />
       <main className="container">
         <Routes>
-          <Route path="/" element={user ? <Dashboard /> : <Login />} />
+          <Route path="/" element={<MainRoutes />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route
-            path="/admin"
-            element={isAdmin ? <Admin /> : <Navigate to="/" replace />}
+            path="/activate"
+            element={!user ? <Login /> : isActive ? <Navigate to="/" replace /> : <Activate />}
           />
+          <Route path="/settings" element={user ? <Settings /> : <Login />} />
+          <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -68,10 +84,10 @@ export default function App() {
             <div>
               <a href={LINKS.main}>Pexli</a>
               <a href={LINKS.faucet}>Faucet</a>
-              <a href={LINKS.dex}>Lifelox DEX</a>
+              <a href={LINKS.dex}>Lifelox</a>
               <a href={LINKS.x}>X</a>
-              <a href={LINKS.instagram}>Instagram</a>
-              <a href={LINKS.chainlist}>Add chain</a>
+              <Link to="/terms">Terms</Link>
+              <Link to="/privacy">Privacy</Link>
             </div>
             <span className="subtle">Pexli Airdrop · points convert to mainnet PEX</span>
           </div>

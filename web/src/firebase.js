@@ -8,7 +8,7 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
-  OAuthProvider,
+  TwitterAuthProvider,
   connectAuthEmulator,
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
@@ -39,7 +39,7 @@ let auth = null;
 let db = null;
 let functions = null;
 let googleProvider = null;
-let appleProvider = null;
+let twitterProvider = null;
 
 if (firebaseConfigured) {
   app = initializeApp(firebaseConfig);
@@ -48,9 +48,7 @@ if (firebaseConfigured) {
   functions = getFunctions(app, functionsRegion);
 
   googleProvider = new GoogleAuthProvider();
-  appleProvider = new OAuthProvider("apple.com");
-  appleProvider.addScope("email");
-  appleProvider.addScope("name");
+  twitterProvider = new TwitterAuthProvider();
 
   if (import.meta.env.VITE_USE_EMULATORS === "true") {
     connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
@@ -65,4 +63,4 @@ if (firebaseConfigured) {
   );
 }
 
-export { app, auth, db, functions, googleProvider, appleProvider };
+export { app, auth, db, functions, googleProvider, twitterProvider };

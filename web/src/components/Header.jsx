@@ -26,6 +26,11 @@ export default function Header() {
               <Icon name="shield" size={16} /> <span className="hide-sm">Admin</span>
             </button>
           )}
+          {user && (
+            <button className="btn btn-sm btn-ghost" onClick={() => navigate("/settings")} title="Settings">
+              <Icon name="gear" size={16} /> <span className="hide-sm">Settings</span>
+            </button>
+          )}
           {user ? (
             <button className="btn btn-sm" onClick={logout} title="Sign out">
               <Icon name="logout" size={16} /> <span className="hide-sm">Sign out</span>
