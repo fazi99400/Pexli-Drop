@@ -16,7 +16,20 @@
 // so the total reserved CPU stays small. Raise these (and/or request a quota
 // bump) once the airdrop grows. Must run BEFORE the function modules are loaded.
 const { setGlobalOptions } = require("firebase-functions/v2");
-setGlobalOptions({ region: "us-central1", memory: "256MiB", maxInstances: 2, concurrency: 80 });
+// A new GCP project ships with a small Cloud Run CPU quota per region, and each
+// of our ~28 functions is a separate Cloud Run service. The deploy-time quota
+// check is roughly sum(maxInstances * cpu) across services, so we keep both
+// low: 1 max instance per function. (cpu must stay >= 1 while concurrency > 1,
+// so we can't shrink CPU further without serializing requests.) concurrency:80
+// means one instance still serves plenty of simultaneous requests for an early
+// airdrop. Raise these (or request a Cloud Run CPU quota bump) as it grows.
+setGlobalOptions({
+  region: "us-central1",
+  memory: "256MiB",
+  cpu: 1,
+  maxInstances: 1,
+  concurrency: 80,
+});
 
 require("./src/init");
 
