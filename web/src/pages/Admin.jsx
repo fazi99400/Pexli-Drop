@@ -437,25 +437,66 @@ function UsersTab() {
               <th>Email</th>
               <th>Wallet</th>
               <th>Points</th>
-              <th>Providers</th>
+              <th>Adjust points</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((u) => (
-              <tr key={u.uid}>
-                <td>{u.xHandle || "—"}</td>
-                <td>{u.email || "—"}</td>
-                <td className="mono">{u.walletAddress || "—"}</td>
-                <td>
-                  <b>{u.points}</b>
-                </td>
-                <td>{(u.authProviders || []).join(", ")}</td>
-              </tr>
+              <UserRow key={u.uid} u={u} onChanged={load} />
             ))}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+// One user row with an inline points adjuster (+/- to cut or add points).
+function UserRow({ u, onChanged }) {
+  const [delta, setDelta] = useState("");
+  const [pts, setPts] = useState(u.points);
+  const [busy, setBusy] = useState(false);
+  async function apply(sign) {
+    const n = Math.abs(parseInt(delta, 10) || 0) * sign;
+    if (!n) return;
+    setBusy(true);
+    try {
+      const res = await api.adjustPoints({ uid: u.uid, delta: n, reason: "admin adjust" });
+      setPts(res.data.points);
+      setDelta("");
+      onChanged?.();
+    } catch (e) {
+      alert(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <tr>
+      <td>{u.xHandle || "—"}</td>
+      <td>{u.email || "—"}</td>
+      <td className="mono">{u.walletAddress || "—"}</td>
+      <td>
+        <b>{pts}</b>
+      </td>
+      <td>
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          <input
+            className="task-input num"
+            type="number"
+            value={delta}
+            placeholder="0"
+            onChange={(e) => setDelta(e.target.value)}
+          />
+          <button className="btn btn-sm" disabled={busy || !delta} onClick={() => apply(1)}>
+            +
+          </button>
+          <button className="btn btn-sm btn-danger" disabled={busy || !delta} onClick={() => apply(-1)}>
+            −
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
 

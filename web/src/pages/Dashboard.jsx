@@ -121,17 +121,30 @@ export default function Dashboard() {
         {T.follow_x && (
           <TaskCard
             title="Follow @PexliLabs on X"
-            desc="Follow the official Pexli account, then verify — points are instant."
+            desc="Follow @PexliLabs, then post a tweet tagging @PexliLabs and paste the link. Auto-verified, free."
             points={P.follow_x}
             icon="x"
             cat="social"
-            buttonLabel="I followed — verify"
+            buttonLabel="Verify tweet"
             disabled={!hasX}
             disabledNote="Save your X handle above first"
-            action={async () => (await api.submitFollow({ platform: "x" })).data}
+            input={{ placeholder: "Paste your tweet link (must tag @PexliLabs)" }}
+            onSubmit={async (url) => (await api.submitFollow({ platform: "x", tweetUrl: url })).data}
             onDone={done}
           >
-            <LinkOut href={LINKS.x}>Open @PexliLabs</LinkOut>
+            <div className="task-actions" style={{ marginTop: 0 }}>
+              <LinkOut href={LINKS.x}>Open @PexliLabs</LinkOut>
+              <a
+                className="btn btn-sm btn-ghost"
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                  "Just joined the @PexliLabs airdrop! #Pexli #PEX",
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Post tweet <Icon name="external" size={15} />
+              </a>
+            </div>
           </TaskCard>
         )}
         {T.follow_ig && (
@@ -522,7 +535,9 @@ function TweetQuest({ points, hasX, onDone }) {
             <div className="task-actions mt">
               <a
                 className="btn btn-sm btn-ghost"
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`}
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                  /@pexlilabs/i.test(tweet) ? tweet : `${tweet} @PexliLabs`,
+                )}`}
                 target="_blank"
                 rel="noreferrer"
               >

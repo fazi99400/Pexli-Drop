@@ -204,6 +204,37 @@ const exportUsersCsv = onCall(CALL_OPTS, async (request) => {
   return { csv: [header, ...rows].join("\n"), count: snap.size };
 });
 
+// Manually adjust a user's points (e.g. cut points from a fake follow after a
+// later check). Positive or negative delta; the user's total never goes below 0.
+// Every adjustment is logged to the ledger for auditability.
+const adjustPoints = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const uid = String(request.data?.uid || "");
+  const delta = Math.trunc(Number(request.data?.delta) || 0);
+  const reason = String(request.data?.reason || "admin adjustment").slice(0, 200);
+  if (!uid || delta === 0) throw new HttpsError("invalid-argument", "Need a uid and a non-zero delta.");
+
+  const userRef = db.collection("users").doc(uid);
+  const newTotal = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    if (!snap.exists) throw new HttpsError("not-found", "User not found.");
+    const cur = snap.data().points || 0;
+    const applied = Math.max(delta, -cur); // clamp so total >= 0
+    tx.set(userRef, { points: FieldValue.increment(applied) }, { merge: true });
+    tx.set(db.collection("pointsLedger").doc(), {
+      uid,
+      taskType: "admin_adjust",
+      points: applied,
+      refId: `adjust:${Date.now()}`,
+      status: "final",
+      reason,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return cur + applied;
+  });
+  return { ok: true, uid, points: newTotal };
+});
+
 // --- Admin bootstrap --------------------------------------------------------
 // Grant the admin claim to another user (requires an existing admin).
 const grantAdmin = onCall(CALL_OPTS, async (request) => {
@@ -273,4 +304,5 @@ module.exports = {
   exportUsersCsv,
   grantAdmin,
   bootstrapAdmin,
+  adjustPoints,
 };

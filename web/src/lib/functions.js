@@ -33,6 +33,7 @@ export const api = {
   listUsers: call("listUsers"),
   exportUsersCsv: call("exportUsersCsv"),
   grantAdmin: call("grantAdmin"),
+  adjustPoints: call("adjustPoints"),
 };
 
 // Turn a Firebase callable error into a friendly message.
