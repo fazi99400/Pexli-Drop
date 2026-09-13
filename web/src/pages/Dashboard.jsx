@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api, errMessage } from "../lib/functions";
 import { LINKS, TX_TARGET_ADDRESS } from "../lib/chain";
@@ -8,14 +8,6 @@ import Icon from "../components/Icon";
 
 export default function Dashboard() {
   const { profile, config, refreshProfile } = useAuth();
-
-  // Surface the ?x=… result the X OAuth callback bounces back with.
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search).get("x");
-    if (!p) return;
-    refreshProfile();
-    window.history.replaceState({}, "", "/");
-  }, [refreshProfile]);
 
   if (!config) {
     return (

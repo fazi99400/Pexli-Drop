@@ -97,7 +97,7 @@ const xCallback = onRequest({ region: "us-central1" }, async (req, res) => {
   } catch (e) {
     if (e.message === "x_taken") return back("x_taken");
     console.error("xCallback error", e);
-    return back("failed");
+    return back("failed&m=" + encodeURIComponent(String(e.message || "error").slice(0, 160)));
   }
 });
 

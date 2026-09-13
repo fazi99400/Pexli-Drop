@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, Link } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import Header from "./components/Header";
@@ -40,8 +41,42 @@ messagingSenderId: "…"`}
   );
 }
 
+// Human-readable copy for the ?x=<code> the X OAuth callback bounces back with.
+function xResultBanner(code, msg) {
+  const map = {
+    connected: { ok: true, text: "X account connected." },
+    denied: { ok: false, text: "You cancelled the X authorization." },
+    bad_request: { ok: false, text: "X sent back an incomplete response — try again." },
+    expired: { ok: false, text: "That X sign-in link expired — tap Connect X again." },
+    no_user: { ok: false, text: "Could not read your X profile. Try again." },
+    x_taken: { ok: false, text: "That X account is already linked to another Pexli account." },
+    failed: {
+      ok: false,
+      text: msg ? `X connect failed: ${msg}` : "X connect failed. Please try again.",
+    },
+  };
+  return map[code] || null;
+}
+
 export default function App() {
-  const { user, isAdmin, isActive, loading, firebaseConfigured } = useAuth();
+  const { user, isAdmin, isActive, loading, firebaseConfigured, refreshProfile } = useAuth();
+
+  // Global handler for the X OAuth return (?x=<code>&m=<detail>). Runs on any
+  // route so the result is visible even when we redirect to /activate.
+  const [xBanner, setXBanner] = useState(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("x");
+    if (!code) return;
+    const banner = xResultBanner(code, params.get("m"));
+    if (banner) setXBanner(banner);
+    if (code === "connected" && refreshProfile) refreshProfile();
+    // Strip the query so a refresh doesn't re-trigger the banner.
+    params.delete("x");
+    params.delete("m");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+  }, []);
 
   if (!firebaseConfigured) return <SetupScreen />;
 
@@ -64,6 +99,16 @@ export default function App() {
   return (
     <>
       <Header />
+      {xBanner && (
+        <div className="container" style={{ marginTop: 12 }}>
+          <div className={`x-banner ${xBanner.ok ? "ok" : "err"}`}>
+            <span>{xBanner.text}</span>
+            <button className="x-banner-close" onClick={() => setXBanner(null)} aria-label="Dismiss">
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       <main className="container">
         <Routes>
           <Route path="/" element={<MainRoutes />} />
