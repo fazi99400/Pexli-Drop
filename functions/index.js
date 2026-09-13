@@ -21,7 +21,6 @@ const scheduled = require("./src/scheduled");
 const leaderboard = require("./src/leaderboard");
 
 // Profile / auth
-exports.onUserCreate = profile.onUserCreate;
 exports.ensureProfile = profile.ensureProfile;
 exports.getMe = profile.getMe;
 exports.setWallet = profile.setWallet;
