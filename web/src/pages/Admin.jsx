@@ -202,6 +202,22 @@ function ConfigTab() {
       </div>
 
       <div className="card mt">
+        <h3 className="task-title">Follow verification</h3>
+        <p className="subtle">
+          Auto-credit follows instantly (X handle is checked for existence). Turn off to review
+          each follow manually in Moderation.
+        </p>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={draft.autoApproveFollows !== false}
+            onChange={(e) => setDraft({ ...draft, autoApproveFollows: e.target.checked })}
+          />
+          <span>Auto-approve follows</span>
+        </label>
+      </div>
+
+      <div className="card mt">
         <h3 className="task-title">Requires admin approval</h3>
         <p className="subtle">Link tasks that hold points as “pending” until you approve them.</p>
         <div className="row">
