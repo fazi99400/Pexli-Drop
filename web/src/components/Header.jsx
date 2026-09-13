@@ -27,6 +27,11 @@ export default function Header() {
             </button>
           )}
           {user && (
+            <button className="btn btn-sm btn-ghost" onClick={() => navigate("/wallet")} title="Wallet">
+              <Icon name="wallet" size={16} /> <span className="hide-sm">Wallet</span>
+            </button>
+          )}
+          {user && (
             <button className="btn btn-sm btn-ghost" onClick={() => navigate("/settings")} title="Settings">
               <Icon name="gear" size={16} /> <span className="hide-sm">Settings</span>
             </button>

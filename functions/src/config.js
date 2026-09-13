@@ -51,6 +51,11 @@ const DEFAULT_CONFIG = {
     enabled: true,
     percent: 10,
   },
+  // In-app faucet: how much native PEX each claim sends (as an ether-string).
+  // The claim cooldown is locks.faucetHrs; points are points.faucet.
+  faucet: {
+    amountPex: "0.05",
+  },
   // Follow tasks: when true, submitting a follow is auto-credited (no admin
   // approval). X submissions still require the handle to be a real, existing
   // public account (checked via a free endpoint). Set false to review manually.
@@ -83,6 +88,7 @@ async function getConfig() {
       ...(data.requiresApproval || {}),
     },
     referral: { ...DEFAULT_CONFIG.referral, ...(data.referral || {}) },
+    faucet: { ...DEFAULT_CONFIG.faucet, ...(data.faucet || {}) },
     autoApproveFollows:
       data.autoApproveFollows === undefined
         ? DEFAULT_CONFIG.autoApproveFollows

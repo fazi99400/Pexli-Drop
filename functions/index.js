@@ -58,6 +58,10 @@ exports.verifyFaucet = onchain.verifyFaucet;
 exports.verifySwap = onchain.verifySwap;
 exports.verifyTx = onchain.verifyTx;
 
+// In-app faucet dispenser (sends PEX from the faucet key to the user's wallet).
+const faucet = require("./src/tasks/faucet");
+exports.claimFaucet = faucet.claimFaucet;
+
 // Link tasks
 exports.submitLink = links.submitLink;
 

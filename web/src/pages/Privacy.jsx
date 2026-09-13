@@ -26,25 +26,34 @@ export default function Privacy() {
         address and any content you post publicly (tweets, links) are, by nature, public.
       </p>
 
-      <h3>4. Cookies &amp; local storage</h3>
+      <h3>4. Your in-app wallet (non-custodial)</h3>
       <p>
-        We use local storage for sign-in sessions and small conveniences (like a referral code).
-        We do not sell your data.
+        The Pexli wallet is <b>self-custody</b>. Your recovery phrase and private key are generated
+        and kept <b>only in your browser</b>, encrypted with your password. They are <b>never sent to
+        or stored on our servers</b> — we only ever store your public wallet address. We cannot
+        recover your wallet for you, so keep your own backup. See{" "}
+        <Link to="/wallet-security">Wallet Security</Link>.
       </p>
 
-      <h3>5. Data retention &amp; deletion</h3>
+      <h3>5. Cookies &amp; local storage</h3>
+      <p>
+        We use local storage for sign-in sessions, small conveniences (like a referral code), and to
+        hold your <b>encrypted</b> wallet on your device. We do not sell your data.
+      </p>
+
+      <h3>6. Data retention &amp; deletion</h3>
       <p>
         We keep your account data while the airdrop runs. To request deletion of your account data,
         contact us via the official Pexli channels.
       </p>
 
-      <h3>6. Security</h3>
+      <h3>7. Security</h3>
       <p>
         All point and reward writes happen server-side; the browser can never write points. Access
         to your own data is restricted to your account.
       </p>
 
-      <h3>7. Changes</h3>
+      <h3>8. Changes</h3>
       <p>We may update this policy; material changes will be reflected on this page.</p>
 
       <p className="mt">

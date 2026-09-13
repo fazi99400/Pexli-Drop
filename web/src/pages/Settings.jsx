@@ -1,17 +1,20 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { WalletCard, SocialCard } from "../components/Account";
+import { SocialCard } from "../components/Account";
+import { WalletManager, WalletOnboard } from "../components/InAppWallet";
+import { useWallet } from "../context/WalletContext";
 
-// Settings — manage wallet + socials here (kept off the main dashboard).
+// Settings — manage the in-app wallet + socials here (kept off the dashboard).
 export default function Settings() {
   const { profile, refreshProfile, logout } = useAuth();
+  const { unlocked } = useWallet();
   return (
     <div style={{ maxWidth: 620, margin: "0 auto" }}>
       <div className="section-head">
         <h2 className="section-title">Settings</h2>
       </div>
       <div className="stack">
-        <WalletCard profile={profile} onSaved={refreshProfile} />
+        {unlocked ? <WalletManager /> : <WalletOnboard onReady={refreshProfile} />}
         <SocialCard profile={profile} onSaved={refreshProfile} />
         <div className="panel">
           <h3 className="card-title">Account</h3>
@@ -22,6 +25,9 @@ export default function Settings() {
             </Link>
             <Link className="btn btn-sm btn-ghost" to="/privacy">
               Privacy Policy
+            </Link>
+            <Link className="btn btn-sm btn-ghost" to="/wallet-security">
+              Wallet Security
             </Link>
             <button className="btn btn-sm btn-danger" onClick={logout}>
               Sign out
