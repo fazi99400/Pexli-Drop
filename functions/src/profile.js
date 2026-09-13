@@ -1,7 +1,6 @@
 // User profile lifecycle: create on sign-up, expose "me", save wallet with
 // server-enforced uniqueness (one wallet per user), and the referral binding.
 const crypto = require("crypto");
-const functionsV1 = require("firebase-functions/v1");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { admin, db, FieldValue, Timestamp } = require("./init");
 const { CALL_OPTS, requireAuth, loadUser } = require("./callable");
@@ -80,16 +79,9 @@ async function ensureReferralCode(uid) {
   return code;
 }
 
-// v1 auth trigger — canonical create path (standard Firebase Auth, no GCIP).
-const onUserCreate = functionsV1.auth.user().onCreate(async (user) => {
-  const ref = db.collection("users").doc(user.uid);
-  const snap = await ref.get();
-  if (!snap.exists) await ref.set(newProfile(user));
-  await ensureReferralCode(user.uid);
-  await maybeGrantAdmin(user.uid, user.email, false);
-});
-
-// Idempotent client-callable fallback (emulator / edge cases).
+// Profile creation happens in ensureProfile, which the client calls on every
+// sign-in (see AuthContext). Creates the profile + referral code and grants the
+// owner admin — all idempotent, so no separate auth-trigger function is needed.
 const ensureProfile = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const ref = db.collection("users").doc(uid);
@@ -193,4 +185,4 @@ function publicProfile(d = {}) {
   };
 }
 
-module.exports = { onUserCreate, ensureProfile, getMe, setReferrer, setWallet, publicProfile };
+module.exports = { ensureProfile, getMe, setReferrer, setWallet, publicProfile };
