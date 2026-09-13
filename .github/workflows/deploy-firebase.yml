@@ -104,14 +104,45 @@ jobs:
             done
           done
 
-      - name: Deploy functions + Firestore rules & indexes
+      # Deploy in small batches. A full "deploy --only functions" spins up a
+      # healthcheck container for EVERY function at once; ~28 of those plus the
+      # already-serving revisions blow past the project's Cloud Run CPU quota, so
+      # many functions fail. Deploying a few at a time keeps the simultaneous
+      # healthcheck CPU low enough to stay under quota — no quota bump needed.
+      - name: Deploy Firestore rules & indexes, then functions in batches
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
         run: |
-          npx --yes firebase-tools@latest deploy \
-            --only functions,firestore \
-            --project pexli-drop \
-            --non-interactive --force
+          npm install -g firebase-tools@latest
+          firebase deploy --only firestore --project pexli-drop --non-interactive --force
+
+          # Function names = every `exports.NAME` in functions/index.js.
+          FNS=$(grep -oE '^exports\.[A-Za-z0-9_]+' functions/index.js | sed 's/^exports\.//' | sort -u)
+          echo "Functions to deploy: $(echo "$FNS" | tr '\n' ' ')"
+
+          BATCH=""
+          N=0
+          FAILED=""
+          deploy_batch() {
+            [ -z "$1" ] && return 0
+            echo "::group::Deploying batch: $1"
+            if ! firebase deploy --only "$1" --project pexli-drop --non-interactive --force; then
+              echo "batch failed: $1"
+              FAILED="$FAILED $1"
+            fi
+            echo "::endgroup::"
+          }
+          for fn in $FNS; do
+            if [ -z "$BATCH" ]; then BATCH="functions:$fn"; else BATCH="$BATCH,functions:$fn"; fi
+            N=$((N + 1))
+            if [ "$N" -ge 6 ]; then deploy_batch "$BATCH"; BATCH=""; N=0; fi
+          done
+          deploy_batch "$BATCH"
+
+          if [ -n "$FAILED" ]; then
+            echo "::error::Some function batches failed:$FAILED"
+            exit 1
+          fi
 
       # 2nd-gen callable functions run on Cloud Run. If the invoker binding for
       # allUsers is missing (common after earlier broken deploys), the browser's
