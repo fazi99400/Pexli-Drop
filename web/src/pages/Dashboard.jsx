@@ -5,25 +5,10 @@ import { connectWallet, addPexliNetwork } from "../lib/wallet";
 import { LINKS, TX_TARGET_ADDRESS } from "../lib/chain";
 import TaskCard from "../components/TaskCard";
 import Leaderboard from "../components/Leaderboard";
+import Icon from "../components/Icon";
 
 export default function Dashboard() {
   const { profile, config, refreshProfile } = useAuth();
-  const [xNotice, setXNotice] = useState("");
-
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search).get("x");
-    if (!p) return;
-    const map = {
-      connected: "X account connected!",
-      x_taken: "That X account is already linked to another user.",
-      denied: "X authorization was cancelled.",
-      expired: "The X sign-in expired — please try again.",
-      failed: "Connecting X failed. Please try again.",
-    };
-    setXNotice(map[p] || "");
-    refreshProfile();
-    window.history.replaceState({}, "", "/");
-  }, [refreshProfile]);
 
   if (!config) {
     return (
@@ -37,7 +22,8 @@ export default function Dashboard() {
   const P = config.points || {};
   const R = config.referral || { enabled: false, percent: 0 };
   const hasWallet = !!profile?.walletAddress;
-  const hasX = !!profile?.xUserId;
+  const hasX = !!profile?.xHandle;
+  const hasIG = !!profile?.igHandle;
   const done = () => refreshProfile();
 
   return (
@@ -51,8 +37,8 @@ export default function Dashboard() {
           Earn <span className="accent">PEX</span> by doing real things
         </h1>
         <p>
-          Connect your wallet and socials, complete on-chain &amp; content quests, and stack points.
-          Points convert to a mainnet PEX reward at distribution.
+          Connect your wallet and socials, complete on-chain &amp; content quests, and climb the
+          leaderboard. Points convert to a mainnet PEX reward.
         </p>
         <div className="stat-grid">
           <div className="stat">
@@ -70,26 +56,22 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* --- Connect --- */}
       <div className="connect">
         <WalletSection profile={profile} onSaved={done} />
-        <XSection profile={profile} notice={xNotice} />
+        <SocialSection profile={profile} onSaved={done} />
       </div>
 
-      {/* --- Referral --- */}
       {R.enabled && <ReferralCard profile={profile} percent={R.percent} />}
 
-      {/* --- Leaderboard --- */}
       <Leaderboard />
 
-      {/* --- On-chain --- */}
       <SectionHead title="On-chain quests" />
       <div className="grid">
         <TaskCard
           title="Claim the faucet"
-          desc="Claim test PEX from faucet.pex.li to your connected wallet."
+          desc="Claim test PEX from the faucet to your connected wallet."
           points={P.faucet}
-          icon="🚰"
+          icon="faucet"
           cat="chain"
           enabled={T.faucet}
           buttonLabel="I claimed — verify"
@@ -98,16 +80,14 @@ export default function Dashboard() {
           action={async () => (await api.verifyFaucet()).data}
           onDone={done}
         >
-          <a className="btn btn-sm btn-ghost" href={LINKS.faucet} target="_blank" rel="noreferrer">
-            Open faucet ↗
-          </a>
+          <LinkOut href={LINKS.faucet}>Open faucet</LinkOut>
         </TaskCard>
 
         <TaskCard
           title="Swap on Lifelox"
           desc="Make any token swap on the Lifelox DEX. Repeats every 12h."
           points={P.swap}
-          icon="🔁"
+          icon="swap"
           cat="chain"
           enabled={T.swap}
           buttonLabel="I swapped — verify"
@@ -116,16 +96,14 @@ export default function Dashboard() {
           action={async () => (await api.verifySwap()).data}
           onDone={done}
         >
-          <a className="btn btn-sm btn-ghost" href={LINKS.dex} target="_blank" rel="noreferrer">
-            Open Lifelox ↗
-          </a>
+          <LinkOut href={LINKS.dex}>Open Lifelox</LinkOut>
         </TaskCard>
 
         <TaskCard
           title="Send PEX"
-          desc="Send any amount of PEX from your wallet to the Pexli address below, then verify. Repeats every hour."
+          desc="Send any amount of PEX from your wallet to the Pexli address below. Repeats hourly."
           points={P.tx}
-          icon="⚡"
+          icon="send"
           cat="chain"
           enabled={T.tx}
           buttonLabel="I sent — verify"
@@ -134,59 +112,48 @@ export default function Dashboard() {
           action={async () => (await api.verifyTx()).data}
           onDone={done}
         >
-          <CopyAddress address={TX_TARGET_ADDRESS} />
+          <CopyRow value={TX_TARGET_ADDRESS} />
         </TaskCard>
       </div>
 
-      {/* --- Follows --- */}
       <SectionHead title="Follow us" />
       <div className="grid">
-        <TaskCard
-          title="Follow @PexliLabs on X"
-          desc="Follow the official Pexli account, then verify."
-          points={P.follow_x}
-          icon="𝕏"
-          cat="social"
-          enabled={T.follow_x}
-          buttonLabel="Verify follow"
-          disabled={!hasX}
-          disabledNote="Connect X above first"
-          action={async () => (await api.verifyFollowX()).data}
-          onDone={done}
-        >
-          <a className="btn btn-sm btn-ghost" href={LINKS.x} target="_blank" rel="noreferrer">
-            Open X ↗
-          </a>
-        </TaskCard>
-
+        {T.follow_x && (
+          <TaskCard
+            title="Follow @PexliLabs on X"
+            desc="Follow the official Pexli account, then submit. An admin confirms it."
+            points={P.follow_x}
+            icon="x"
+            cat="social"
+            buttonLabel="I followed — submit"
+            disabled={!hasX}
+            disabledNote="Save your X handle above first"
+            action={async () => (await api.submitFollow({ platform: "x" })).data}
+            onDone={done}
+          >
+            <LinkOut href={LINKS.x}>Open @PexliLabs</LinkOut>
+          </TaskCard>
+        )}
         {T.follow_ig && (
-          <div className="card task-card" data-cat="social">
-            <div className="task-head">
-              <div className="row" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
-                <div className="task-icon">📸</div>
-                <div>
-                  <h3 className="task-title">Follow on Instagram</h3>
-                  <p className="task-desc">
-                    Follow @PexliLab. Instagram has no follow API, so this is reviewed manually.
-                  </p>
-                </div>
-              </div>
-              <span className="task-points">+{P.follow_ig}</span>
-            </div>
-            <div className="task-actions">
-              <a className="btn btn-sm btn-ghost" href={LINKS.instagram} target="_blank" rel="noreferrer">
-                Open Instagram ↗
-              </a>
-              <span className="subtle">Awarded after review</span>
-            </div>
-          </div>
+          <TaskCard
+            title="Follow on Instagram"
+            desc="Follow @PexliLab on Instagram, then submit. An admin confirms it."
+            points={P.follow_ig}
+            icon="instagram"
+            cat="social"
+            buttonLabel="I followed — submit"
+            disabled={!hasIG}
+            disabledNote="Save your Instagram handle above first"
+            action={async () => (await api.submitFollow({ platform: "instagram" })).data}
+            onDone={done}
+          >
+            <LinkOut href={LINKS.instagram}>Open Instagram</LinkOut>
+          </TaskCard>
         )}
       </div>
 
-      {/* --- Tweet quest --- */}
       {T.tweet && <TweetQuest points={P.tweet} hasX={hasX} onDone={done} />}
 
-      {/* --- Content --- */}
       <SectionHead title="Create content" />
       <div className="grid">
         {T.medium && (
@@ -194,7 +161,7 @@ export default function Dashboard() {
             title="Write a Medium article"
             desc="Publish an article about Pexli, paste the link. Reviewed before finalizing."
             points={P.medium}
-            icon="✍️"
+            icon="medium"
             cat="content"
             buttonLabel="Submit link"
             input={{ placeholder: "https://medium.com/@you/..." }}
@@ -207,7 +174,7 @@ export default function Dashboard() {
             title="Post a YouTube video"
             desc="Make a video about Pexli, paste the link. Reviewed before finalizing."
             points={P.youtube}
-            icon="▶️"
+            icon="youtube"
             cat="content"
             buttonLabel="Submit link"
             input={{ placeholder: "https://youtube.com/watch?v=..." }}
@@ -220,7 +187,7 @@ export default function Dashboard() {
             title="Post a TikTok"
             desc="Make a TikTok about Pexli and paste the link."
             points={P.tiktok}
-            icon="🎵"
+            icon="tiktok"
             cat="content"
             buttonLabel="Submit link"
             input={{ placeholder: "https://tiktok.com/@you/video/..." }}
@@ -233,7 +200,7 @@ export default function Dashboard() {
             title="Post on Instagram"
             desc="Share a Pexli post and paste the link."
             points={P.instagram}
-            icon="📸"
+            icon="instagram"
             cat="content"
             buttonLabel="Submit link"
             input={{ placeholder: "https://instagram.com/p/..." }}
@@ -246,7 +213,7 @@ export default function Dashboard() {
             title="Write a review"
             desc="Publish a written review of Pexli anywhere public, paste the link."
             points={P.review}
-            icon="⭐"
+            icon="star"
             cat="content"
             buttonLabel="Submit link"
             input={{ placeholder: "https://..." }}
@@ -267,23 +234,30 @@ function SectionHead({ title }) {
   );
 }
 
-// Small copyable address chip (used by the "Send PEX" task).
-function CopyAddress({ address }) {
+function LinkOut({ href, children }) {
+  return (
+    <a className="btn btn-sm btn-ghost" href={href} target="_blank" rel="noreferrer">
+      {children} <Icon name="external" size={15} />
+    </a>
+  );
+}
+
+function CopyRow({ value }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
-      await navigator.clipboard.writeText(address);
+      await navigator.clipboard.writeText(value);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), 1400);
     } catch (e) {
-      /* clipboard blocked */
+      /* blocked */
     }
   }
   return (
-    <div className="ref-code-box">
-      <span className="mono" style={{ flex: 1, minWidth: 140, wordBreak: "break-all" }}>{address}</span>
+    <div className="copy-row">
+      <span className="mono">{value}</span>
       <button className="btn btn-sm" onClick={copy}>
-        {copied ? "Copied ✓" : "Copy"}
+        <Icon name={copied ? "check" : "copy"} size={15} /> {copied ? "Copied" : "Copy"}
       </button>
     </div>
   );
@@ -294,47 +268,47 @@ function ReferralCard({ profile, percent }) {
   const [copied, setCopied] = useState("");
   const code = profile?.referralCode || "…";
   const link = `${window.location.origin}/?ref=${code}`;
-
   async function copy(text, what) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(what);
-      setTimeout(() => setCopied(""), 1500);
+      setTimeout(() => setCopied(""), 1400);
     } catch (e) {
-      setCopied("");
+      /* blocked */
     }
   }
-
   return (
     <div className="referral mt">
       <div className="referral-inner">
-        <div className="row spread" style={{ alignItems: "flex-start" }}>
+        <div className="ref-top">
           <div>
-            <h3 className="task-title" style={{ fontSize: 18 }}>🎁 Invite friends, earn {percent}%</h3>
+            <h3 className="card-title">
+              <Icon name="gift" /> Invite friends, earn {percent}%
+            </h3>
             <p className="task-desc" style={{ maxWidth: 460 }}>
-              Share your link. You earn <b style={{ color: "var(--accent)" }}>{percent}%</b> of every
-              point your referrals make — automatically, forever.
+              Share your link. You earn <b className="accent">{percent}%</b> of every point your
+              referrals make — automatically, forever.
             </p>
           </div>
-          <div className="row">
-            <div className="stat" style={{ padding: "10px 16px" }}>
-              <div className="n accent" style={{ fontSize: 20 }}>{profile?.referralCount ?? 0}</div>
+          <div className="ref-stats">
+            <div className="stat">
+              <div className="n accent">{profile?.referralCount ?? 0}</div>
               <div className="l">Invited</div>
             </div>
-            <div className="stat" style={{ padding: "10px 16px" }}>
-              <div className="n" style={{ fontSize: 20 }}>{(profile?.referralPointsEarned ?? 0).toLocaleString()}</div>
+            <div className="stat">
+              <div className="n">{(profile?.referralPointsEarned ?? 0).toLocaleString()}</div>
               <div className="l">Earned</div>
             </div>
           </div>
         </div>
-
         <div className="ref-code-box mt">
           <input className="ref-link" readOnly value={link} onFocus={(e) => e.target.select()} />
           <button className="btn btn-sm" onClick={() => copy(link, "link")}>
-            {copied === "link" ? "Copied ✓" : "Copy link"}
+            <Icon name={copied === "link" ? "check" : "copy"} size={15} />
+            {copied === "link" ? "Copied" : "Link"}
           </button>
           <button className="btn btn-sm btn-primary" onClick={() => copy(code, "code")}>
-            {copied === "code" ? "Copied ✓" : `Copy code ${code}`}
+            {copied === "code" ? "Copied" : code}
           </button>
         </div>
       </div>
@@ -360,7 +334,6 @@ function WalletSection({ profile, onSaved }) {
       setBusy(false);
     }
   }
-
   async function save() {
     setBusy(true);
     setMsg(null);
@@ -379,11 +352,11 @@ function WalletSection({ profile, onSaved }) {
   return (
     <div className="panel">
       <div className="row spread">
-        <h3 className="task-title">
-          👛 Wallet {saved && <span className="badge on">connected</span>}
+        <h3 className="card-title">
+          <Icon name="wallet" /> Wallet {saved && <span className="badge on">saved</span>}
         </h3>
         <button className="btn btn-sm btn-ghost" onClick={() => addPexliNetwork().catch(() => {})}>
-          + Pexli network
+          + Network
         </button>
       </div>
       {saved ? (
@@ -393,18 +366,92 @@ function WalletSection({ profile, onSaved }) {
       ) : (
         <p className="task-desc">Connect MetaMask/TrustWallet (auto-adds Pexli) or paste an address.</p>
       )}
-      <div className="row">
+      <div className="stack">
         <button className="btn btn-sm" onClick={connect} disabled={busy}>
-          Connect wallet
+          <Icon name="wallet" size={16} /> Connect wallet
         </button>
+        <div className="row">
+          <input
+            className="task-input"
+            style={{ flex: 1, minWidth: 140 }}
+            placeholder="0x… reward address"
+            value={addr}
+            onChange={(e) => setAddr(e.target.value)}
+          />
+          <button className="btn btn-primary btn-sm" onClick={save} disabled={busy || !addr.trim()}>
+            {saved ? "Update" : "Save"}
+          </button>
+        </div>
+      </div>
+      {msg && <p className={`msg ${msg.ok ? "ok" : "err"}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
+// --- Social handles (X + Instagram), no OAuth / no paid API ---
+function SocialSection({ profile, onSaved }) {
+  return (
+    <div className="panel">
+      <h3 className="card-title">
+        <Icon name="users" /> Your socials
+      </h3>
+      <p className="task-desc">Save your handles to unlock the follow &amp; tweet quests.</p>
+      <HandleRow
+        icon="x"
+        label="X (Twitter)"
+        placeholder="your X handle"
+        saved={profile?.xHandle}
+        platform="x"
+        onSaved={onSaved}
+      />
+      <HandleRow
+        icon="instagram"
+        label="Instagram"
+        placeholder="your Instagram handle"
+        saved={profile?.igHandle}
+        platform="instagram"
+        onSaved={onSaved}
+      />
+    </div>
+  );
+}
+
+function HandleRow({ icon, label, placeholder, saved, platform, onSaved }) {
+  const [val, setVal] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api.setSocialHandle({ platform, handle: val.trim() });
+      setMsg({ ok: true, text: `Saved @${res.data.handle}` });
+      setVal("");
+      onSaved?.();
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="handle-row">
+      <div className="row spread">
+        <span className="kv" style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <Icon name={icon} size={16} /> {label}
+          {saved && <span className="mono">@{saved}</span>}
+        </span>
+      </div>
+      <div className="row">
+        <span className="at">@</span>
         <input
           className="task-input"
-          style={{ flex: 1, minWidth: 160 }}
-          placeholder="0x… reward address"
-          value={addr}
-          onChange={(e) => setAddr(e.target.value)}
+          style={{ flex: 1, minWidth: 120 }}
+          placeholder={placeholder}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
         />
-        <button className="btn btn-primary btn-sm" onClick={save} disabled={busy || !addr.trim()}>
+        <button className="btn btn-primary btn-sm" onClick={save} disabled={busy || !val.trim()}>
           {saved ? "Update" : "Save"}
         </button>
       </div>
@@ -413,54 +460,10 @@ function WalletSection({ profile, onSaved }) {
   );
 }
 
-// --- X connect ---
-function XSection({ profile, notice }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const connected = !!profile?.xUserId;
-
-  async function connect() {
-    setBusy(true);
-    setErr("");
-    try {
-      const res = await api.xAuthStart();
-      window.location.href = res.data.url;
-    } catch (e) {
-      setErr(errMessage(e));
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="panel">
-      <div className="row spread">
-        <h3 className="task-title">
-          𝕏 Account {connected && <span className="badge on">connected</span>}
-        </h3>
-        {!connected && (
-          <button className="btn btn-sm btn-primary" onClick={connect} disabled={busy}>
-            {busy ? "Redirecting…" : "Connect X"}
-          </button>
-        )}
-      </div>
-      <p className="kv">
-        {connected ? (
-          <>
-            Connected as <b className="mono">@{profile.xHandle}</b>
-          </>
-        ) : (
-          "Connect X to unlock the follow + tweet quests."
-        )}
-      </p>
-      {notice && <p className="msg ok">{notice}</p>}
-      {err && <p className="msg err">{err}</p>}
-    </div>
-  );
-}
-
-// --- Tweet quest ---
+// --- Tweet quest (assign + verify via free oEmbed) ---
 function TweetQuest({ points, hasX, onDone }) {
   const [tweet, setTweet] = useState(null);
+  const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -479,9 +482,10 @@ function TweetQuest({ points, hasX, onDone }) {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await api.verifyTweet();
-      setMsg({ ok: true, text: res.data.message || "Verified! Points added." });
+      const res = await api.verifyTweetPublic({ url: url.trim() });
+      setMsg({ ok: true, text: res.data.message || "Verified!" });
       setTweet(null);
+      setUrl("");
       onDone?.();
     } catch (e) {
       setMsg({ ok: false, text: errMessage(e) });
@@ -496,18 +500,21 @@ function TweetQuest({ points, hasX, onDone }) {
       <div className="card task-card" data-cat="x">
         <div className="task-head">
           <div className="row" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
-            <div className="task-icon">🐦</div>
+            <div className="task-icon">
+              <Icon name="x" />
+            </div>
             <div>
               <h3 className="task-title">Tweet from the pool</h3>
               <p className="task-desc">
-                Get an assigned tweet, post it from your X account, verify. New tweet every 30 min.
+                Get a tweet, post it from your X account, then paste the tweet link. New tweet every
+                30 min.
               </p>
             </div>
           </div>
           <span className="task-points">+{points}</span>
         </div>
 
-        {!hasX && <p className="subtle">Connect your X account above first.</p>}
+        {!hasX && <p className="subtle">Save your X handle above first.</p>}
 
         {tweet && (
           <div className="panel" style={{ background: "var(--bg)" }}>
@@ -519,9 +526,15 @@ function TweetQuest({ points, hasX, onDone }) {
                 target="_blank"
                 rel="noreferrer"
               >
-                Open X to post ↗
+                Post on X <Icon name="external" size={15} />
               </a>
             </div>
+            <input
+              className="task-input mt"
+              placeholder="Paste your tweet link (…/status/…)"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
           </div>
         )}
 
@@ -531,8 +544,8 @@ function TweetQuest({ points, hasX, onDone }) {
               {busy ? "…" : "Get my tweet"}
             </button>
           ) : (
-            <button className="btn btn-primary btn-sm" onClick={verify} disabled={busy}>
-              {busy ? "Checking…" : "I posted — verify"}
+            <button className="btn btn-primary btn-sm" onClick={verify} disabled={busy || !url.trim()}>
+              {busy ? "Checking…" : "Verify tweet"}
             </button>
           )}
         </div>

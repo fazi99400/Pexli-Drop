@@ -308,7 +308,7 @@ function ModerationTab() {
       </div>
       <Msg msg={msg} />
       {rows.length === 0 ? (
-        <p className="subtle">Nothing awaiting approval. 🎉</p>
+        <p className="subtle">Nothing awaiting approval.</p>
       ) : (
         <div className="table-wrap mt">
           <table>

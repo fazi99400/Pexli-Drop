@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import Icon from "./Icon";
 
 export default function Header() {
   const { user, profile, isAdmin, logout } = useAuth();
@@ -21,13 +22,13 @@ export default function Header() {
             </span>
           )}
           {isAdmin && (
-            <button className="btn btn-sm btn-ghost" onClick={() => navigate("/admin")}>
-              Admin
+            <button className="btn btn-sm btn-ghost" onClick={() => navigate("/admin")} title="Admin">
+              <Icon name="shield" size={16} /> <span className="hide-sm">Admin</span>
             </button>
           )}
           {user ? (
-            <button className="btn btn-sm" onClick={logout}>
-              Sign out
+            <button className="btn btn-sm" onClick={logout} title="Sign out">
+              <Icon name="logout" size={16} /> <span className="hide-sm">Sign out</span>
             </button>
           ) : (
             <button className="btn btn-sm btn-primary" onClick={() => navigate("/")}>

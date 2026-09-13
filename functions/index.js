@@ -16,6 +16,7 @@ const profile = require("./src/profile");
 const onchain = require("./src/tasks/onchain");
 const links = require("./src/tasks/links");
 const x = require("./src/tasks/x");
+const social = require("./src/social");
 const admin = require("./src/admin");
 const scheduled = require("./src/scheduled");
 const leaderboard = require("./src/leaderboard");
@@ -34,12 +35,11 @@ exports.verifyTx = onchain.verifyTx;
 // Link tasks
 exports.submitLink = links.submitLink;
 
-// X / Twitter
-exports.xAuthStart = x.xAuthStart;
-exports.xCallback = x.xCallback;
-exports.verifyFollowX = x.verifyFollowX;
-exports.assignTweet = x.assignTweet;
-exports.verifyTweet = x.verifyTweet;
+// Social (no paid API): handle entry, follow review queue, free tweet verify.
+exports.setSocialHandle = social.setSocialHandle;
+exports.submitFollow = social.submitFollow;
+exports.verifyTweetPublic = social.verifyTweetPublic;
+exports.assignTweet = x.assignTweet; // API-free: picks a random pool tweet
 
 // Admin
 exports.updateConfig = admin.updateConfig;
