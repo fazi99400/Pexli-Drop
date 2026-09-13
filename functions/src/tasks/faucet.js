@@ -22,19 +22,29 @@ const { hoursSince } = require("../util");
 
 const FAUCET_PRIVATE_KEY = params.FAUCET_PRIVATE_KEY;
 
+// Accepts EITHER a hex private key OR a BIP-39 recovery phrase (mnemonic) in the
+// FAUCET_PRIVATE_KEY secret — whichever the owner stored.
 function faucetSigner() {
-  const pk = (FAUCET_PRIVATE_KEY.value() || "").trim();
-  if (!pk) {
+  const raw = (FAUCET_PRIVATE_KEY.value() || "").trim();
+  if (!raw) {
     throw new HttpsError(
       "failed-precondition",
       "The faucet isn't funded yet. Please try again later.",
     );
   }
-  const key = pk.startsWith("0x") ? pk : "0x" + pk;
+  const provider = chain.getProvider();
   try {
-    return new ethers.Wallet(key, chain.getProvider());
+    // A mnemonic is multiple whitespace-separated words; a private key is one
+    // hex string.
+    const looksMnemonic = /\s/.test(raw) && !raw.startsWith("0x");
+    if (looksMnemonic) {
+      const phrase = raw.replace(/\s+/g, " ").toLowerCase();
+      return ethers.Wallet.fromPhrase(phrase).connect(provider);
+    }
+    const key = raw.startsWith("0x") ? raw : "0x" + raw;
+    return new ethers.Wallet(key, provider);
   } catch (e) {
-    throw new HttpsError("failed-precondition", "Faucet key is misconfigured.");
+    throw new HttpsError("failed-precondition", "Faucet key/phrase is misconfigured.");
   }
 }
 

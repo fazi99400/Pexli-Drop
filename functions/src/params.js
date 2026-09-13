@@ -24,12 +24,12 @@ const PEXLI_CHAIN_ID = defineString("PEXLI_CHAIN_ID", { default: "78901" });
 // The Pexli faucet is a normal account (EOA) that dispenses native PEX.
 // Faucet claim = user RECEIVES from it; tx task = user SENDS to it.
 const FAUCET_ADDRESS = defineString("FAUCET_ADDRESS", {
-  default: "0x0ACf5276dc2b0863E91e27CB48e39bA3EF135Abf",
+  default: "0x2431bc9ff07Ad93152f7Cd18566CfC573731f732",
 });
 // Destination the "send a transaction" task requires PEX to be sent to
 // (defaults to the faucet address per the owner's spec).
 const TX_TARGET_ADDRESS = defineString("TX_TARGET_ADDRESS", {
-  default: "0x0ACf5276dc2b0863E91e27CB48e39bA3EF135Abf",
+  default: "0x2431bc9ff07Ad93152f7Cd18566CfC573731f732",
 });
 const DEX_ROUTER_ADDRESS = defineString("DEX_ROUTER_ADDRESS", {
   default: "0x596b93967Cc18539795437A17E689e775c2CCE93",
