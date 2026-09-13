@@ -41,6 +41,11 @@ exports.submitFollow = social.submitFollow;
 exports.verifyTweetPublic = social.verifyTweetPublic;
 exports.assignTweet = x.assignTweet; // API-free: picks a random pool tweet
 
+// Optional X OAuth connect (free — only to verify a real account). Works once a
+// free X app's X_CLIENT_ID / X_CLIENT_SECRET are configured.
+exports.xAuthStart = x.xAuthStart;
+exports.xCallback = x.xCallback;
+
 // Admin
 exports.updateConfig = admin.updateConfig;
 exports.uploadTweets = admin.uploadTweets;

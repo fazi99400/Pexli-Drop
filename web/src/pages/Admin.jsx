@@ -295,8 +295,9 @@ function ModerationTab() {
     setMsg(null);
     try {
       const res = await api.listPending();
-      setRows(res.data);
+      setRows(res.data || []);
     } catch (e) {
+      setRows([]); // never leave it spinning forever
       setMsg({ ok: false, text: errMessage(e) });
     }
   }

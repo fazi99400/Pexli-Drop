@@ -110,13 +110,17 @@ const setTweetActive = onCall(CALL_OPTS, async (request) => {
 // List pending (awaiting-approval) ledger rows.
 const listPending = onCall(CALL_OPTS, async (request) => {
   requireAdmin(request);
-  const snap = await db
-    .collection("pointsLedger")
-    .where("status", "==", "pending")
-    .orderBy("createdAt", "desc")
-    .limit(100)
-    .get();
-  return snap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: tsToMs(d.data().createdAt) }));
+  const base = db.collection("pointsLedger").where("status", "==", "pending");
+  let snap;
+  try {
+    snap = await base.orderBy("createdAt", "desc").limit(100).get();
+  } catch (e) {
+    // Composite index may not be built yet — fall back to an unordered query.
+    snap = await base.limit(100).get();
+  }
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: tsToMs(d.data().createdAt) }));
+  rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return rows;
 });
 
 // Approve a pending row: flip to final and move its points into the cached total.
