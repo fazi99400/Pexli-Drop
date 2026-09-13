@@ -50,6 +50,21 @@ jobs:
           fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
 
+      # Inject the confidential X client secret from a GitHub secret into the
+      # committed functions/.env — so the real secret never lives in the repo.
+      - name: Inject X_CLIENT_SECRET (if set)
+        env:
+          X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+        run: |
+          if [ -n "$X_CLIENT_SECRET" ]; then
+            grep -v '^X_CLIENT_SECRET=' functions/.env > functions/.env.tmp || true
+            printf 'X_CLIENT_SECRET=%s\n' "$X_CLIENT_SECRET" >> functions/.env.tmp
+            mv functions/.env.tmp functions/.env
+            echo "X_CLIENT_SECRET injected into functions/.env"
+          else
+            echo "No X_CLIENT_SECRET secret set — skipping (public-client / PKCE mode)."
+          fi
+
       - name: Deploy functions + Firestore rules & indexes
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
