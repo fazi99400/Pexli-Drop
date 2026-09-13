@@ -1,5 +1,10 @@
 // Pexli Airdrop — Cloud Functions entry point.
 //
+// DEPLOY MARKER: 2026-09-13-r2  (bump this string to force firebase to redeploy
+// all functions when it would otherwise report "No changes detected" — e.g.
+// after a failed deploy left stale serving revisions while the stored source
+// hash was already advanced).
+//
 // Every exported name becomes a deployed function. Grouped by phase:
 //   profile   — user lifecycle + wallet (Phase 1/3)
 //   onchain   — faucet / swap / tx verification (Phase 4)
