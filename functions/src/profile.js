@@ -96,8 +96,18 @@ const ensureProfile = onCall(CALL_OPTS, async (request) => {
       }),
     );
   }
-  await ensureReferralCode(uid);
-  await maybeGrantAdmin(uid, request.auth.token.email, request.auth.token.admin === true);
+  // Side effects must never crash profile creation — if the runtime SA lacks a
+  // permission (e.g. to set custom claims) the profile still returns fine.
+  try {
+    await ensureReferralCode(uid);
+  } catch (e) {
+    console.warn("ensureReferralCode failed:", e.message);
+  }
+  try {
+    await maybeGrantAdmin(uid, request.auth.token.email, request.auth.token.admin === true);
+  } catch (e) {
+    console.warn("maybeGrantAdmin failed:", e.message);
+  }
   const fresh = await ref.get();
   return publicProfile(fresh.data());
 });
@@ -139,28 +149,49 @@ const setReferrer = onCall(CALL_OPTS, async (request) => {
 });
 
 // Save / update wallet address. Enforces global uniqueness (one wallet/user).
+// If the caller's profile doc doesn't exist yet (e.g. ensureProfile hadn't run),
+// create it here so a first-time save never fails. Unexpected errors are
+// rethrown with their real message so the UI shows the actual cause.
 const setWallet = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
-  const checksummed = normalizeAddress(request.data?.walletAddress);
-  const lower = lc(checksummed);
-  const userRef = db.collection("users").doc(uid);
-  const indexRef = db.collection("walletIndex").doc(lower);
+  try {
+    const checksummed = normalizeAddress(request.data?.walletAddress);
+    const lower = lc(checksummed);
+    const userRef = db.collection("users").doc(uid);
+    const indexRef = db.collection("walletIndex").doc(lower);
 
-  await db.runTransaction(async (tx) => {
-    const [idxSnap, userSnap] = await Promise.all([tx.get(indexRef), tx.get(userRef)]);
-    if (idxSnap.exists && idxSnap.data().uid !== uid) {
-      throw new HttpsError("already-exists", "That wallet address is already linked to another account.");
+    // Make sure a profile exists (self-heal instead of erroring).
+    const pre = await userRef.get();
+    if (!pre.exists) {
+      await userRef.set(
+        newProfile({
+          uid,
+          displayName: request.auth.token.name || "",
+          email: request.auth.token.email || "",
+          providerData: [{ providerId: request.auth.token.firebase?.sign_in_provider || "google" }],
+        }),
+      );
     }
-    if (!userSnap.exists) throw new HttpsError("failed-precondition", "Complete sign-in first.");
-    const prev = userSnap.data().walletAddress;
-    if (prev && lc(prev) !== lower) {
-      tx.delete(db.collection("walletIndex").doc(lc(prev)));
-    }
-    tx.set(indexRef, { uid, at: FieldValue.serverTimestamp() });
-    tx.set(userRef, { walletAddress: checksummed }, { merge: true });
-  });
 
-  return { walletAddress: checksummed };
+    await db.runTransaction(async (tx) => {
+      const [idxSnap, userSnap] = await Promise.all([tx.get(indexRef), tx.get(userRef)]);
+      if (idxSnap.exists && idxSnap.data().uid !== uid) {
+        throw new HttpsError("already-exists", "That wallet address is already linked to another account.");
+      }
+      const prev = userSnap.exists ? userSnap.data().walletAddress : null;
+      if (prev && lc(prev) !== lower) {
+        tx.delete(db.collection("walletIndex").doc(lc(prev)));
+      }
+      tx.set(indexRef, { uid, at: FieldValue.serverTimestamp() });
+      tx.set(userRef, { walletAddress: checksummed }, { merge: true });
+    });
+
+    return { walletAddress: checksummed };
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error("setWallet failed:", e);
+    throw new HttpsError("internal", `Wallet save failed: ${e.message}`);
+  }
 });
 
 // Whitelist of fields ever sent to the client.
