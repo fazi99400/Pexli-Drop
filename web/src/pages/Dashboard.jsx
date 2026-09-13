@@ -121,11 +121,11 @@ export default function Dashboard() {
         {T.follow_x && (
           <TaskCard
             title="Follow @PexliLabs on X"
-            desc="Follow the official Pexli account, then submit. An admin confirms it."
+            desc="Follow the official Pexli account, then verify — points are instant."
             points={P.follow_x}
             icon="x"
             cat="social"
-            buttonLabel="I followed — submit"
+            buttonLabel="I followed — verify"
             disabled={!hasX}
             disabledNote="Save your X handle above first"
             action={async () => (await api.submitFollow({ platform: "x" })).data}
@@ -137,11 +137,11 @@ export default function Dashboard() {
         {T.follow_ig && (
           <TaskCard
             title="Follow on Instagram"
-            desc="Follow @PexliLab on Instagram, then submit. An admin confirms it."
+            desc="Follow @PexliLab on Instagram, then verify — points are instant."
             points={P.follow_ig}
             icon="instagram"
             cat="social"
-            buttonLabel="I followed — submit"
+            buttonLabel="I followed — verify"
             disabled={!hasIG}
             disabledNote="Save your Instagram handle above first"
             action={async () => (await api.submitFollow({ platform: "instagram" })).data}

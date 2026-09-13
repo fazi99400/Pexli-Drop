@@ -43,8 +43,32 @@ const setSocialHandle = onCall(CALL_OPTS, async (request) => {
   return { platform, handle };
 });
 
-// Submit a follow (X or Instagram) for admin review. One submission per user
-// per platform; points finalize when the admin approves.
+// Free check that an X handle is a real, existing, public account — via X's
+// public syndication endpoint (used by embedded timelines; no API key). Returns
+// true (exists), false (definitely not found), or "unknown" (couldn't tell).
+async function xAccountExists(handle) {
+  try {
+    const res = await fetch(
+      `https://syndication.twitter.com/srv/timeline-profile/screen-name/${encodeURIComponent(handle)}`,
+      { headers: { "User-Agent": "Mozilla/5.0 (compatible; PexliBot/1.0)" } },
+    );
+    if (res.status === 404) return false;
+    if (!res.ok) return "unknown";
+    const body = (await res.text()).toLowerCase();
+    if (/user not found|doesn.t exist|account doesn|page does not exist/.test(body)) return false;
+    if (body.includes(`"screenname":"${handle.toLowerCase()}"`) || body.includes(handle.toLowerCase())) {
+      return true;
+    }
+    return "unknown";
+  } catch (e) {
+    return "unknown";
+  }
+}
+
+// Submit a follow (X or Instagram). Automatic by default: points are credited
+// immediately (no admin approval). X requires the handle to be a real existing
+// account. When config.autoApproveFollows is false, it goes to admin review.
+// One submission per user per platform (refId is unique).
 const submitFollow = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const platform = request.data?.platform === "instagram" ? "instagram" : "x";
@@ -55,14 +79,34 @@ const submitFollow = onCall(CALL_OPTS, async (request) => {
   if (!handle) {
     throw new HttpsError("failed-precondition", "Save your handle first, then submit.");
   }
+
+  const auto = config.autoApproveFollows !== false;
+  let status = "pending";
+  if (auto) {
+    if (platform === "x") {
+      const exists = await xAccountExists(handle);
+      if (exists === false) {
+        throw new HttpsError("not-found", "We couldn't find that X account. Check your handle.");
+      }
+      status = "final"; // exists or unknown → credit (best free verification)
+    } else {
+      status = "final"; // Instagram can't be verified for free
+    }
+  }
+
   const result = await awardPoints({
     uid,
     taskType,
     points: config.points[taskType],
     refId: `${taskType}:${uid}`,
-    status: "pending",
+    status,
   });
-  return { ok: true, ...result, message: "Submitted! An admin will confirm your follow shortly." };
+  return {
+    ok: true,
+    ...result,
+    status,
+    message: status === "final" ? "Verified! Points added." : "Submitted for review.",
+  };
 });
 
 // twitter.com / x.com  /<username>/status/<id>

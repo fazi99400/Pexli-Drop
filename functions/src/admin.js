@@ -51,6 +51,9 @@ const updateConfig = onCall(CALL_OPTS, async (request) => {
       clean.referral.percent = Math.min(100, Math.max(0, Number(patch.referral.percent) || 0));
     }
   }
+  if ("autoApproveFollows" in patch) {
+    clean.autoApproveFollows = Boolean(patch.autoApproveFollows);
+  }
   if (patch.leaderboard) {
     clean.leaderboard = {};
     if ("enabled" in patch.leaderboard) {
