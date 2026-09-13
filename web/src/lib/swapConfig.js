@@ -9,14 +9,16 @@
 // swap client (lib/swap.js) only relies on the names present here.
 
 export const SWAP_CONFIG = {
-  // Router contract address on Pexli. Leave "" to keep swap disabled.
-  routerAddress: "",
+  // PexSwap router contract address on Pexli.
+  routerAddress: "0x596b93967Cc18539795437A17E689e775c2CCE93",
 
-  // Wrapped-native (WPEX) address — needed for PEX <-> token swaps. Optional if
-  // you only support token <-> token.
+  // Wrapped-native (WPEX) address — needed for PEX <-> token swaps. FILL THIS
+  // with the router's WETH()/WPEX() address to enable native swaps.
   wpexAddress: "",
 
   // Tokens shown in the picker. `address: "native"` is the native PEX coin.
+  // ADD the tradable ERC-20 tokens here (address / symbol / decimals) to turn
+  // swapping on — at least one ERC-20 alongside PEX.
   tokens: [
     { address: "native", symbol: "PEX", name: "Pexli", decimals: 18 },
     // { address: "0x...", symbol: "USDX", name: "USDX", decimals: 6 },
@@ -42,6 +44,9 @@ export const ERC20_ABI = [
   "function symbol() view returns (string)",
 ];
 
+// Swap is live only once we have a router AND at least two swappable tokens
+// (so PEX + one ERC-20, or two ERC-20s). Until the token list / WPEX are filled
+// the Swap card shows a friendly "coming soon" state instead of a broken picker.
 export function swapEnabled() {
-  return !!SWAP_CONFIG.routerAddress;
+  return !!SWAP_CONFIG.routerAddress && SWAP_CONFIG.tokens.length >= 2;
 }
