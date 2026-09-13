@@ -10,6 +10,7 @@ export const api = {
   getMe: call("getMe"),
   setWallet: call("setWallet"),
   setReferrer: call("setReferrer"),
+  getLeaderboard: call("getLeaderboard"),
 
   verifyFaucet: call("verifyFaucet"),
   verifySwap: call("verifySwap"),

@@ -18,6 +18,7 @@ const links = require("./src/tasks/links");
 const x = require("./src/tasks/x");
 const admin = require("./src/admin");
 const scheduled = require("./src/scheduled");
+const leaderboard = require("./src/leaderboard");
 
 // Profile / auth
 exports.onUserCreate = profile.onUserCreate;
@@ -52,6 +53,10 @@ exports.listUsers = admin.listUsers;
 exports.exportUsersCsv = admin.exportUsersCsv;
 exports.grantAdmin = admin.grantAdmin;
 exports.bootstrapAdmin = admin.bootstrapAdmin;
+
+// Leaderboard
+exports.getLeaderboard = leaderboard.getLeaderboard;
+exports.dailyLeaderboardRewards = leaderboard.dailyLeaderboardRewards;
 
 // Scheduled
 exports.expireTweetAssignments = scheduled.expireTweetAssignments;

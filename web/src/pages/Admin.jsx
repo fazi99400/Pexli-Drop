@@ -154,6 +154,54 @@ function ConfigTab() {
       </div>
 
       <div className="card mt">
+        <h3 className="task-title">Leaderboard (daily rank bonus)</h3>
+        <p className="subtle">Every 24h the top players earn these bonus points by rank.</p>
+        <div className="row">
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={!!draft.leaderboard?.enabled}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  leaderboard: { ...draft.leaderboard, enabled: e.target.checked },
+                })
+              }
+            />
+            <span>Enabled</span>
+          </label>
+        </div>
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))" }}>
+          {[
+            ["rank1", "#1"],
+            ["rank2", "#2"],
+            ["rank3", "#3"],
+            ["top10", "Top 10"],
+            ["top50", "Top 50"],
+            ["top100", "Top 100"],
+          ].map(([k, label]) => (
+            <div className="field" key={k}>
+              <label>{label}</label>
+              <input
+                className="num"
+                type="number"
+                value={draft.leaderboard?.rewards?.[k] ?? 0}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    leaderboard: {
+                      ...draft.leaderboard,
+                      rewards: { ...draft.leaderboard?.rewards, [k]: Number(e.target.value) },
+                    },
+                  })
+                }
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card mt">
         <h3 className="task-title">Requires admin approval</h3>
         <p className="subtle">Link tasks that hold points as “pending” until you approve them.</p>
         <div className="row">
