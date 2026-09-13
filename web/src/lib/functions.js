@@ -22,6 +22,7 @@ export const api = {
   submitFollow: call("submitFollow"),
   assignTweet: call("assignTweet"),
   verifyTweetPublic: call("verifyTweetPublic"),
+  xAuthStart: call("xAuthStart"),
 
   // Admin
   updateConfig: call("updateConfig"),

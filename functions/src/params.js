@@ -42,10 +42,14 @@ const X_CLIENT_ID = defineString("X_CLIENT_ID", { default: "" });
 const X_CLIENT_SECRET = defineString("X_CLIENT_SECRET", { default: "" });
 // Public numeric id of the Pexli account users must follow (@PexliLabs).
 const X_PEXLI_USER_ID = defineString("X_PEXLI_USER_ID", { default: "" });
-// Where X redirects back after OAuth (must match the app settings).
+// OAuth redirect — must EXACTLY match the Callback URL set in the X app. This is
+// the xCallback Cloud Function URL (it processes the code then bounces the user
+// back to APP_URL).
 const X_REDIRECT_URI = defineString("X_REDIRECT_URI", {
-  default: "https://drop.pex.li/x/callback",
+  default: "https://us-central1-pexli-drop.cloudfunctions.net/xCallback",
 });
+// Where the site lives — used to send the user back after X connect.
+const APP_URL = defineString("APP_URL", { default: "https://drop.pex.li" });
 
 // --- App ---------------------------------------------------------------------
 // Comma-separated list of origins allowed to call the HTTP (OAuth) endpoints.
@@ -70,6 +74,7 @@ module.exports = {
   X_CLIENT_SECRET,
   X_PEXLI_USER_ID,
   X_REDIRECT_URI,
+  APP_URL,
   ALLOWED_ORIGINS,
   ADMIN_EMAILS,
 };

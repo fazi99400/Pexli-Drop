@@ -58,7 +58,7 @@ const xAuthStart = onCall(CALL_OPTS, async (request) => {
 // one-X-account-per-user uniqueness, persist ids + tokens, redirect to the app.
 const xCallback = onRequest({ region: "us-central1" }, async (req, res) => {
   const { code, state, error } = req.query;
-  const appBase = params.X_REDIRECT_URI.value().replace(/\/x\/callback.*$/, "");
+  const appBase = params.APP_URL.value().replace(/\/+$/, "");
   const back = (q) => res.redirect(`${appBase}/?x=${q}`);
   if (error) return back("denied");
   if (!code || !state) return back("bad_request");

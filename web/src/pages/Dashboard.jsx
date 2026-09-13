@@ -10,6 +10,14 @@ import Icon from "../components/Icon";
 export default function Dashboard() {
   const { profile, config, refreshProfile } = useAuth();
 
+  // Surface the ?x=… result the X OAuth callback bounces back with.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("x");
+    if (!p) return;
+    refreshProfile();
+    window.history.replaceState({}, "", "/");
+  }, [refreshProfile]);
+
   if (!config) {
     return (
       <div className="center">
@@ -403,12 +411,37 @@ function WalletSection({ profile, onSaved }) {
 
 // --- Social handles (X + Instagram), no OAuth / no paid API ---
 function SocialSection({ profile, onSaved }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const connected = !!profile?.xUserId;
+
+  async function connectX() {
+    setBusy(true);
+    setErr("");
+    try {
+      const res = await api.xAuthStart();
+      window.location.href = res.data.url;
+    } catch (e) {
+      setErr(errMessage(e));
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="panel">
-      <h3 className="card-title">
-        <Icon name="users" /> Your socials
-      </h3>
-      <p className="task-desc">Save your handles to unlock the follow &amp; tweet quests.</p>
+      <div className="row spread">
+        <h3 className="card-title">
+          <Icon name="users" /> Your socials
+        </h3>
+        <button className="btn btn-sm" onClick={connectX} disabled={busy || connected} title="Verify a real X account">
+          <Icon name="x" size={15} /> {connected ? "X verified" : "Connect X"}
+        </button>
+      </div>
+      <p className="task-desc">
+        Save your handles to unlock the follow &amp; tweet quests. Optionally connect X to verify
+        you&apos;re a real account.
+      </p>
+      {err && <p className="msg err">{err}</p>}
       <HandleRow
         icon="x"
         label="X (Twitter)"
