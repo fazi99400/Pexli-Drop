@@ -14,11 +14,15 @@ web/.vite/
 .env.*.local
 web/.env
 web/.env.local
-functions/.env
 functions/.env.local
 functions/.runtimeconfig.json
 serviceAccountKey.json
 *-service-account*.json
+
+# functions/.env holds only NON-SECRET function params (public chain addresses,
+# owner email, empty X/admin fields) and is committed so CI deploys have values.
+# Never put a real secret here — use GitHub Secrets + workflow env injection.
+!functions/.env
 
 # Firebase
 .firebase/
