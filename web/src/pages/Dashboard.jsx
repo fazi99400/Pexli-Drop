@@ -4,6 +4,7 @@ import { api, errMessage } from "../lib/functions";
 import { connectWallet, addPexliNetwork } from "../lib/wallet";
 import { LINKS, TX_TARGET_ADDRESS } from "../lib/chain";
 import TaskCard from "../components/TaskCard";
+import Leaderboard from "../components/Leaderboard";
 
 export default function Dashboard() {
   const { profile, config, refreshProfile } = useAuth();
@@ -77,6 +78,9 @@ export default function Dashboard() {
 
       {/* --- Referral --- */}
       {R.enabled && <ReferralCard profile={profile} percent={R.percent} />}
+
+      {/* --- Leaderboard --- */}
+      <Leaderboard />
 
       {/* --- On-chain --- */}
       <SectionHead title="On-chain quests" />

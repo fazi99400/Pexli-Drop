@@ -51,6 +51,12 @@ const DEFAULT_CONFIG = {
     enabled: true,
     percent: 10,
   },
+  // Daily leaderboard bonus: every 24h, users are ranked by points and awarded
+  // by rank tier (owner-defined). Editable in admin.
+  leaderboard: {
+    enabled: true,
+    rewards: { rank1: 200, rank2: 150, rank3: 100, top10: 75, top50: 50, top100: 30 },
+  },
 };
 
 const CONFIG_REF = db.collection("config").doc("global");
@@ -73,6 +79,14 @@ async function getConfig() {
       ...(data.requiresApproval || {}),
     },
     referral: { ...DEFAULT_CONFIG.referral, ...(data.referral || {}) },
+    leaderboard: {
+      ...DEFAULT_CONFIG.leaderboard,
+      ...(data.leaderboard || {}),
+      rewards: {
+        ...DEFAULT_CONFIG.leaderboard.rewards,
+        ...((data.leaderboard || {}).rewards || {}),
+      },
+    },
   };
 }
 

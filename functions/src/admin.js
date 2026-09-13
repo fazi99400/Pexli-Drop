@@ -51,6 +51,20 @@ const updateConfig = onCall(CALL_OPTS, async (request) => {
       clean.referral.percent = Math.min(100, Math.max(0, Number(patch.referral.percent) || 0));
     }
   }
+  if (patch.leaderboard) {
+    clean.leaderboard = {};
+    if ("enabled" in patch.leaderboard) {
+      clean.leaderboard.enabled = Boolean(patch.leaderboard.enabled);
+    }
+    if (patch.leaderboard.rewards) {
+      clean.leaderboard.rewards = {};
+      for (const k of Object.keys(DEFAULT_CONFIG.leaderboard.rewards)) {
+        if (k in patch.leaderboard.rewards) {
+          clean.leaderboard.rewards[k] = Math.max(0, Number(patch.leaderboard.rewards[k]) || 0);
+        }
+      }
+    }
+  }
   await CONFIG_REF.set(clean, { merge: true });
   const fresh = await CONFIG_REF.get();
   return fresh.data();
