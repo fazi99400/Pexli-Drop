@@ -58,3 +58,24 @@ jobs:
             --only functions,firestore \
             --project pexli-drop \
             --non-interactive --force
+
+      # 2nd-gen callable functions run on Cloud Run. If the invoker binding for
+      # allUsers is missing (common after earlier broken deploys), the browser's
+      # call is rejected before the code runs and the SDK reports a bare
+      # "internal". Grant public invoke on every function's Cloud Run service.
+      # Safe: onCall verifies the Firebase Auth token in-code; the HTTP endpoints
+      # (xCallback / token-guarded bootstrapAdmin) are meant to be public.
+      - name: Allow public invocation of functions (fix "internal")
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+          gcloud config set project pexli-drop --quiet
+          SERVICES=$(gcloud run services list --region=us-central1 --format='value(metadata.name)')
+          echo "Cloud Run services: $SERVICES"
+          for svc in $SERVICES; do
+            echo "→ granting allUsers run.invoker on $svc"
+            gcloud run services add-iam-policy-binding "$svc" \
+              --region=us-central1 --platform=managed \
+              --member=allUsers --role=roles/run.invoker --quiet || true
+          done
