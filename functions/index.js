@@ -10,6 +10,14 @@
 //
 // All point writes flow through src/points.js in a transaction. The client
 // never writes points — see firestore.rules.
+
+// Keep the whole deployment within a new project's default Cloud Run CPU quota:
+// ~28 functions each become a Cloud Run service, so cap max instances and memory
+// so the total reserved CPU stays small. Raise these (and/or request a quota
+// bump) once the airdrop grows. Must run BEFORE the function modules are loaded.
+const { setGlobalOptions } = require("firebase-functions/v2");
+setGlobalOptions({ region: "us-central1", memory: "256MiB", maxInstances: 2, concurrency: 80 });
+
 require("./src/init");
 
 const profile = require("./src/profile");
