@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import Icon from "../components/Icon";
 
 export default function Login() {
-  const { signInGoogle, signInApple } = useAuth();
+  const { signInGoogle, signInX } = useAuth();
   const [err, setErr] = useState("");
   const referred = safeGet("pexli_ref");
 
@@ -11,7 +13,12 @@ export default function Login() {
     try {
       await fn();
     } catch (e) {
-      if (e?.code !== "auth/popup-closed-by-user") setErr(e?.message || "Sign-in failed.");
+      if (e?.code === "auth/popup-closed-by-user") return;
+      if (e?.code === "auth/operation-not-allowed") {
+        setErr("X sign-in isn't enabled yet — use Google, or enable Twitter in Firebase Auth.");
+      } else {
+        setErr(e?.message || "Sign-in failed.");
+      }
     }
   };
 
@@ -33,13 +40,17 @@ export default function Login() {
         <button className="btn btn-primary" onClick={run(signInGoogle)}>
           Continue with Google
         </button>
-        <button className="btn" onClick={run(signInApple)}>
-          Continue with Apple
+        <button className="btn" onClick={run(signInX)}>
+          <Icon name="x" size={16} /> Continue with X
         </button>
 
         {err && <p className="msg err mt">{err}</p>}
         <p className="subtle mt">
-          One wallet &amp; one X account per person. All points are verified server-side.
+          One wallet &amp; one X account per person. After sign-in you’ll activate your account.
+        </p>
+        <p className="subtle" style={{ fontSize: 12 }}>
+          By continuing you agree to our <Link to="/terms">Terms</Link> &amp;{" "}
+          <Link to="/privacy">Privacy Policy</Link>.
         </p>
       </div>
     </div>

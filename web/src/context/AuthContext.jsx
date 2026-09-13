@@ -5,7 +5,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db, googleProvider, appleProvider, firebaseConfigured } from "../firebase";
+import { auth, db, googleProvider, twitterProvider, firebaseConfigured } from "../firebase";
 import { api } from "../lib/functions";
 import { DEFAULT_CONFIG } from "../lib/defaultConfig";
 
@@ -116,8 +116,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signInGoogle = () => signInWithPopup(auth, googleProvider);
-  const signInApple = () => signInWithPopup(auth, appleProvider);
+  const signInX = () => signInWithPopup(auth, twitterProvider);
   const logout = () => signOut(auth);
+
+  // Account is "active" (can enter the airdrop) once it has a reward wallet AND
+  // an X account linked. This raises the bar for bot/fake accounts.
+  const isActive = !!(profile && profile.walletAddress && profile.xHandle);
 
   const value = {
     user,
@@ -126,10 +130,11 @@ export function AuthProvider({ children }) {
     config,
     loading,
     firebaseConfigured,
+    isActive,
     refreshProfile,
     setProfile,
     signInGoogle,
-    signInApple,
+    signInX,
     logout,
   };
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

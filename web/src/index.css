@@ -255,6 +255,22 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 .rankbadge.r2 { background: linear-gradient(180deg,#dfe4ea,#aab2bd); color: #14171b; border-color: transparent; }
 .rankbadge.r3 { background: linear-gradient(180deg,#e0a066,#cd7f32); color: #1a0f00; border-color: transparent; }
 
+/* --- Activation checklist --- */
+.checklist { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.chk {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600;
+  color: var(--muted); background: var(--bg-card); border: 1px solid var(--border);
+  padding: 7px 13px; border-radius: 999px;
+}
+.chk.done { color: var(--green); border-color: rgba(62,207,142,.35); background: rgba(62,207,142,.10); }
+
+/* --- Legal pages --- */
+.legal { max-width: 720px; margin: 0 auto; padding: 20px 0 10px; }
+.legal h1 { font-size: 30px; margin: 8px 0 4px; }
+.legal h3 { font-size: 16px; margin: 22px 0 6px; }
+.legal p { color: var(--muted); font-size: 14.5px; line-height: 1.65; }
+.legal a { color: var(--accent); }
+
 /* --- Mobile optimization --- */
 @media (max-width: 760px) {
   .container { padding: 0 14px; }
