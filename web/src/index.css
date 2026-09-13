@@ -299,3 +299,26 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 @media (max-width: 380px) {
   h1 { font-size: 27px; }
 }
+
+/* X OAuth result banner (surfaces ?x=<code>&m=<detail>) */
+.x-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; font-size: 14px; font-weight: 600; line-height: 1.4;
+}
+.x-banner.ok {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  border-color: color-mix(in srgb, var(--green) 35%, transparent);
+}
+.x-banner.err {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  border-color: color-mix(in srgb, var(--red) 35%, transparent);
+  word-break: break-word;
+}
+.x-banner-close {
+  flex-shrink: 0; background: transparent; border: none; color: inherit;
+  font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; opacity: .8;
+}
+.x-banner-close:hover { opacity: 1; }
