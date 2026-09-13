@@ -65,6 +65,30 @@ jobs:
             echo "No X_CLIENT_SECRET secret set — skipping (public-client / PKCE mode)."
           fi
 
+      # Every failed deploy leaves behind a non-serving Cloud Run revision that
+      # still reserves CPU against the project/region quota. After a few failures
+      # these orphans pile up and exhaust "total allowable CPU per project per
+      # region", so ALL functions then fail with a quota error. Before deploying,
+      # delete every revision that is NOT the one currently serving traffic to
+      # reclaim that CPU. Safe: the active (serving) revision is always kept.
+      - name: Reclaim CPU — delete orphan Cloud Run revisions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+          gcloud config set project pexli-drop --quiet
+          for svc in $(gcloud run services list --region=us-central1 --format='value(metadata.name)'); do
+            active=$(gcloud run services describe "$svc" --region=us-central1 \
+              --format='value(status.traffic.revisionName)' 2>/dev/null | tr ';' '\n' | head -n1)
+            for rev in $(gcloud run revisions list --service="$svc" --region=us-central1 \
+              --format='value(metadata.name)'); do
+              if [ -n "$rev" ] && [ "$rev" != "$active" ]; then
+                echo "→ deleting orphan revision $rev (service $svc, active=$active)"
+                gcloud run revisions delete "$rev" --region=us-central1 --quiet || true
+              fi
+            done
+          done
+
       - name: Deploy functions + Firestore rules & indexes
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
