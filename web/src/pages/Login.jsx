@@ -26,7 +26,7 @@ export default function Login() {
 
         {referred && (
           <p className="msg ok" style={{ marginTop: 12 }}>
-            🎁 You were invited with code <b>{referred}</b> — sign in to link it.
+            You were invited with code <b>{referred}</b> — sign in to link it.
           </p>
         )}
 

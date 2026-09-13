@@ -18,10 +18,10 @@ export const api = {
 
   submitLink: call("submitLink"),
 
-  xAuthStart: call("xAuthStart"),
-  verifyFollowX: call("verifyFollowX"),
+  setSocialHandle: call("setSocialHandle"),
+  submitFollow: call("submitFollow"),
   assignTweet: call("assignTweet"),
-  verifyTweet: call("verifyTweet"),
+  verifyTweetPublic: call("verifyTweetPublic"),
 
   // Admin
   updateConfig: call("updateConfig"),

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, errMessage } from "../lib/functions";
 import { useAuth } from "../context/AuthContext";
+import Icon from "./Icon";
 
 // Top-100 leaderboard with the daily rank-bonus legend.
 export default function Leaderboard() {
@@ -24,12 +25,15 @@ export default function Leaderboard() {
     load();
   }, []);
 
-  const medal = (rank) => (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`);
+  const rankClass = (rank) => (rank <= 3 ? `rankbadge r${rank}` : "rankbadge");
 
   return (
     <>
       <div className="section-head">
-        <h2 className="section-title">🏆 Leaderboard</h2>
+        <h2 className="section-title">
+          <Icon name="trophy" size={22} style={{ verticalAlign: "-4px", marginRight: 6 }} />
+          Leaderboard
+        </h2>
         <span className="count">Top 100 · updates live</span>
       </div>
 
@@ -39,9 +43,9 @@ export default function Leaderboard() {
             Every 24 hours the top players earn bonus points by rank:
           </p>
           <div className="row" style={{ gap: 8 }}>
-            <span className="task-points">🥇 #1 +{r.rank1}</span>
-            <span className="task-points">🥈 #2 +{r.rank2}</span>
-            <span className="task-points">🥉 #3 +{r.rank3}</span>
+            <span className="task-points">#1 +{r.rank1}</span>
+            <span className="task-points">#2 +{r.rank2}</span>
+            <span className="task-points">#3 +{r.rank3}</span>
             <span className="task-points">Top 10 +{r.top10}</span>
             <span className="task-points">Top 50 +{r.top50}</span>
             <span className="task-points">Top 100 +{r.top100}</span>
@@ -71,7 +75,9 @@ export default function Leaderboard() {
                 const me = user && row.uid === user.uid;
                 return (
                   <tr key={row.uid} style={me ? { background: "rgba(198,242,78,0.10)" } : undefined}>
-                    <td style={{ fontWeight: 700 }}>{medal(row.rank)}</td>
+                    <td>
+                      <span className={rankClass(row.rank)}>{row.rank}</span>
+                    </td>
                     <td>
                       {row.name} {me && <span className="badge on">you</span>}
                     </td>

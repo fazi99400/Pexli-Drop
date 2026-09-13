@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { errMessage } from "../lib/functions";
+import Icon from "./Icon";
 
 // Generic quest card. Handles its own loading + success/error message. The
 // parent passes an async `action` (button) or `onSubmit` (URL/text input);
@@ -8,7 +9,7 @@ export default function TaskCard({
   title,
   desc,
   points,
-  icon = "✦",
+  icon = "spark", // Icon name
   cat, // "chain" | "social" | "content" | "x"
   enabled = true,
   buttonLabel = "Verify",
@@ -45,7 +46,7 @@ export default function TaskCard({
     <div className="card task-card" data-cat={cat}>
       <div className="task-head">
         <div className="row" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
-          <div className="task-icon">{icon}</div>
+          <div className="task-icon"><Icon name={icon} /></div>
           <div>
             <h3 className="task-title">{title}</h3>
             <p className="task-desc">{desc}</p>
