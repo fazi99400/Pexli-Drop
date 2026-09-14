@@ -146,7 +146,7 @@ export default function App() {
               <Link to="/privacy">Privacy</Link>
               <Link to="/wallet-security">Wallet Security</Link>
             </div>
-            <span className="subtle">Pexli Airdrop · points convert to mainnet PEX</span>
+            <span className="subtle">Pexli Airdrop — All rights reserved by Pexli Labs</span>
           </div>
         </div>
       </footer>
