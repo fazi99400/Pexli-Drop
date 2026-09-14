@@ -32,10 +32,13 @@ async function readPairAddresses(client, factory) {
     const lenData = await client.call({ to: factory, data: encodeFunctionData({ abi: FACTORY_ABI, functionName: "allPairsLength" }) });
     const length = decodeFunctionResult({ abi: FACTORY_ABI, functionName: "allPairsLength", data: (lenData.data ?? "0x0") });
     const indices = Array.from({ length: Number(length) }, (_, i) => BigInt(i));
-    return Promise.all(indices.map(async (i) => {
-        const res = await client.call({ to: factory, data: encodeFunctionData({ abi: FACTORY_ABI, functionName: "allPairs", args: [i] }) });
-        return decodeFunctionResult({ abi: FACTORY_ABI, functionName: "allPairs", data: (res.data ?? "0x0") });
+    const addrs = await Promise.all(indices.map(async (i) => {
+        try {
+            const res = await client.call({ to: factory, data: encodeFunctionData({ abi: FACTORY_ABI, functionName: "allPairs", args: [i] }) });
+            return decodeFunctionResult({ abi: FACTORY_ABI, functionName: "allPairs", data: (res.data ?? "0x0") });
+        } catch (e) { return null; }
     }));
+    return addrs.filter(Boolean);
 }
 /** Read every pool on the core (EVM) factory. Both sides are Solidity/native 0x addresses. */
 export async function listCorePools(client, factory) {
@@ -65,24 +68,27 @@ export async function listDualPools(client, factory) {
     // asset(lane, token, id): 0 = Solidity (use token), 1 = Rust (use id),
     // 2 = native PEX — the UI's sentinel address, not whatever `token` holds.
     const toSide = (a) => Number(a[0]) === 1 ? { lane: "rust", id: Number(a[2]) } : { lane: "solidity", address: Number(a[0]) === 2 ? NATIVE_PEX_ADDRESS : a[1] };
-    return Promise.all(pairs.map(async (pair) => {
-        const [a0, a1, res] = await Promise.all([
-            client.call({ to: pair, data: encodeFunctionData({ abi: DUAL_PAIR_ABI, functionName: "asset0" }) }),
-            client.call({ to: pair, data: encodeFunctionData({ abi: DUAL_PAIR_ABI, functionName: "asset1" }) }),
-            client.call({ to: pair, data: encodeFunctionData({ abi: DUAL_PAIR_ABI, functionName: "getReserves" }) }),
-        ]);
-        const asset0 = decodeFunctionResult({ abi: DUAL_PAIR_ABI, functionName: "asset0", data: (a0.data ?? "0x0") });
-        const asset1 = decodeFunctionResult({ abi: DUAL_PAIR_ABI, functionName: "asset1", data: (a1.data ?? "0x0") });
-        const reserves = decodeFunctionResult({ abi: DUAL_PAIR_ABI, functionName: "getReserves", data: (res.data ?? "0x0") });
-        return {
-            pair,
-            source: "dual",
-            side0: toSide(asset0),
-            side1: toSide(asset1),
-            reserve0: reserves[0],
-            reserve1: reserves[1],
-        };
+    const out = await Promise.all(pairs.map(async (pair) => {
+        try {
+            const [a0, a1, res] = await Promise.all([
+                client.call({ to: pair, data: encodeFunctionData({ abi: DUAL_PAIR_ABI, functionName: "asset0" }) }),
+                client.call({ to: pair, data: encodeFunctionData({ abi: DUAL_PAIR_ABI, functionName: "asset1" }) }),
+                client.call({ to: pair, data: encodeFunctionData({ abi: DUAL_PAIR_ABI, functionName: "getReserves" }) }),
+            ]);
+            const asset0 = decodeFunctionResult({ abi: DUAL_PAIR_ABI, functionName: "asset0", data: (a0.data ?? "0x0") });
+            const asset1 = decodeFunctionResult({ abi: DUAL_PAIR_ABI, functionName: "asset1", data: (a1.data ?? "0x0") });
+            const reserves = decodeFunctionResult({ abi: DUAL_PAIR_ABI, functionName: "getReserves", data: (res.data ?? "0x0") });
+            return {
+                pair,
+                source: "dual",
+                side0: toSide(asset0),
+                side1: toSide(asset1),
+                reserve0: reserves[0],
+                reserve1: reserves[1],
+            };
+        } catch (e) { return null; }
     }));
+    return out.filter(Boolean);
 }
 /**
  * Read every pool a swap widget could draw on: the core factory (if given)
