@@ -62,6 +62,10 @@ exports.verifyTx = onchain.verifyTx;
 const faucet = require("./src/tasks/faucet");
 exports.claimFaucet = faucet.claimFaucet;
 
+// RPC-only tx verification (explorer has no API): verify a client tx hash.
+const verify = require("./src/tasks/verify");
+exports.verifyTxHash = verify.verifyTxHash;
+
 // Link tasks
 exports.submitLink = links.submitLink;
 

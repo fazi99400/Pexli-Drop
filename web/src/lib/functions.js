@@ -16,6 +16,7 @@ export const api = {
   claimFaucet: call("claimFaucet"),
   verifySwap: call("verifySwap"),
   verifyTx: call("verifyTx"),
+  verifyTxHash: call("verifyTxHash"),
 
   submitLink: call("submitLink"),
 

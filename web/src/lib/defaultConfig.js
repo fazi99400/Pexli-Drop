@@ -33,6 +33,7 @@ export const DEFAULT_CONFIG = {
   requiresApproval: { medium: true, youtube: true, tiktok: false, instagram: false, review: false },
   referral: { enabled: true, percent: 10 },
   faucet: { amountPex: "0.05" },
+  tx: { amountPex: "0.0004" },
   autoApproveFollows: true,
   leaderboard: {
     enabled: true,

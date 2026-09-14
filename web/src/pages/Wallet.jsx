@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useWallet } from "../context/WalletContext";
 import { WalletOnboard, WalletManager } from "../components/InAppWallet";
 import { api, errMessage } from "../lib/functions";
 import { ethers, explorerTxUrl } from "../lib/localWallet";
+import { TX_TARGET_ADDRESS } from "../lib/chain";
 import { SWAP_CONFIG, swapEnabled } from "../lib/swapConfig";
 import { getQuote, executeSwap } from "../lib/swap";
 import Icon from "../components/Icon";
@@ -27,7 +28,7 @@ export default function Wallet() {
           <WalletManager />
           <FaucetCard />
           <SwapCard />
-          <SendCard />
+          <SendToPexliCard />
         </div>
       )}
     </div>
@@ -199,54 +200,54 @@ function SwapCard() {
   );
 }
 
-// --- Send PEX ---------------------------------------------------------------
-function SendCard() {
+// --- Transaction task: one-click send to the Pexli (faucet) address ---------
+// No address field — it always goes to the fixed Pexli address and earns the
+// tx-task points. Verified server-side by tx hash over RPC (no explorer).
+function SendToPexliCard() {
+  const { config, refreshProfile } = useAuth();
   const { signer, refreshBalance } = useWallet();
-  const [to, setTo] = useState("");
-  const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState("");
   const [msg, setMsg] = useState(null);
+  const amount = config?.tx?.amountPex || "0.0004";
+  const points = config?.points?.tx ?? 15;
 
   async function send() {
+    if (!signer) return;
     setBusy(true);
     setMsg(null);
     try {
-      const dest = ethers.getAddress(to.trim());
-      const tx = await signer.sendTransaction({ to: dest, value: ethers.parseEther(String(amount)) });
-      const receipt = await tx.wait(1);
-      setMsg({ ok: true, hash: receipt.hash, text: `Sent ${amount} PEX` });
-      setTo("");
-      setAmount("");
+      setStep("Sending…");
+      const tx = await signer.sendTransaction({
+        to: ethers.getAddress(TX_TARGET_ADDRESS),
+        value: ethers.parseEther(String(amount)),
+      });
+      setStep("Confirming…");
+      const res = await api.verifyTxHash({ hash: tx.hash, taskType: "tx" });
+      setMsg({ ok: true, hash: res.data.txHash, text: `Sent ${amount} PEX (+${points} pts)` });
       setTimeout(() => refreshBalance(), 1500);
+      refreshProfile();
     } catch (e) {
-      setMsg({ ok: false, text: e?.shortMessage || e?.message || "Send failed." });
+      setMsg({ ok: false, text: e?.shortMessage || errMessage(e) });
     } finally {
       setBusy(false);
+      setStep("");
     }
   }
 
-  const valid = useMemo(() => {
-    try {
-      return !!ethers.getAddress(to.trim()) && Number(amount) > 0;
-    } catch (e) {
-      return false;
-    }
-  }, [to, amount]);
-
   return (
     <div className="panel">
-      <h3 className="card-title"><Icon name="send" /> Send PEX</h3>
-      <div className="stack">
-        <input className="task-input" placeholder="0x… recipient address" value={to}
-          onChange={(e) => setTo(e.target.value)} />
-        <div className="row">
-          <input className="task-input" style={{ flex: 1 }} type="number" min="0" placeholder="amount"
-            value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <button className="btn btn-primary btn-sm" onClick={send} disabled={busy || !valid}>
-            {busy ? "Sending…" : "Send"}
-          </button>
-        </div>
+      <div className="row spread">
+        <h3 className="card-title"><Icon name="send" /> Send to Pexli</h3>
+        <span className="badge">+{points} pts</span>
       </div>
+      <p className="task-desc">
+        Send <b>{amount} PEX</b> to the Pexli address in one tap — no address to type — and earn points.
+        Repeats every {config?.locks?.txHrs ?? 1}h.
+      </p>
+      <button className="btn btn-primary" onClick={send} disabled={busy}>
+        {busy ? (step || "Working…") : `Send ${amount} PEX`}
+      </button>
       {msg && (
         <p className={`msg ${msg.ok ? "ok" : "err"}`}>
           {msg.text} {msg.ok && msg.hash && <TxLink hash={msg.hash} />}
