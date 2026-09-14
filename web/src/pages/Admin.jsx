@@ -41,13 +41,13 @@ const RANGES = [
   { label: "90 days", days: 90 },
 ];
 
-// Chart colours pulled from the theme so light/dark both look right.
+// Chart colours — a single blue family (+ green for positive series), so the
+// dashboard reads as one flat, Coinbase-style palette in both themes.
 const C = {
-  orange: "var(--accent)",
-  deep: "var(--accent-2)",
+  blue: "var(--accent)",
+  indigo: "#6b8cff",
+  sky: "#38bdf8",
   green: "var(--green)",
-  cyan: "var(--cyan)",
-  red: "var(--red)",
 };
 
 function Panel({ title, sub, children, span }) {
@@ -121,30 +121,30 @@ function DashboardTab() {
 
       {/* Headline KPIs */}
       <div className="kpi-grid">
-        <StatCard label="Total users" value={u.total} sub={`${u.activated} activated · ${activePct}%`} accent={C.orange} icon="👥" />
-        <StatCard label="Active today" value={activeToday} sub="earned points today" accent={C.cyan} icon="⚡" />
-        <StatCard label="Total points minted" value={u.totalPoints} sub={`${u.referralPoints || 0} from referrals`} accent={C.green} icon="◆" />
-        <StatCard label="Total swaps" value={at.swap || 0} sub={`${tm.swap || 0} this month`} accent={C.orange} icon="⇄" />
-        <StatCard label="Total transactions" value={totalTx} sub={`swaps + sends + faucet`} accent={C.deep} icon="↗" />
-        <StatCard label="Faucet claims" value={at.faucet || 0} sub={`${tm.faucet || 0} this month`} accent={C.cyan} icon="🚰" />
+        <StatCard label="Total users" value={u.total} sub={`${u.activated} activated · ${activePct}%`} accent={C.blue} />
+        <StatCard label="Active today" value={activeToday} sub="earned points today" accent={C.sky} />
+        <StatCard label="Total points minted" value={u.totalPoints} sub={`${u.referralPoints || 0} from referrals`} accent={C.green} />
+        <StatCard label="Total swaps" value={at.swap || 0} sub={`${tm.swap || 0} this month`} accent={C.blue} />
+        <StatCard label="Total transactions" value={totalTx} sub={`swaps + sends + faucet`} accent={C.indigo} />
+        <StatCard label="Faucet claims" value={at.faucet || 0} sub={`${tm.faucet || 0} this month`} accent={C.sky} />
       </div>
 
       {/* Time-series */}
       <div className="dash-grid">
         <Panel title="Daily active users" sub={`last ${days} days`}>
-          <AreaLine data={data.daily} field="activeUsers" color={C.cyan} />
+          <AreaLine data={data.daily} field="activeUsers" color={C.sky} />
         </Panel>
         <Panel title="Points minted / day" sub={`last ${days} days`}>
           <Bars data={data.daily.map((d) => ({ ...d, value: d.points }))} color={C.green} />
         </Panel>
         <Panel title="Swaps / day" sub={`last ${days} days`}>
-          <Bars data={data.daily.map((d) => ({ ...d, value: d.swaps }))} color={C.orange} />
+          <Bars data={data.daily.map((d) => ({ ...d, value: d.swaps }))} color={C.blue} />
         </Panel>
         <Panel title="Transactions (send PEX) / day" sub={`last ${days} days`}>
-          <Bars data={data.daily.map((d) => ({ ...d, value: d.txs }))} color={C.deep} />
+          <Bars data={data.daily.map((d) => ({ ...d, value: d.txs }))} color={C.indigo} />
         </Panel>
         <Panel title="New sign-ups / day" sub={`last ${days} days`}>
-          <Bars data={data.daily.map((d) => ({ ...d, value: d.signups }))} color={C.cyan} />
+          <Bars data={data.daily.map((d) => ({ ...d, value: d.signups }))} color={C.sky} />
         </Panel>
         <Panel title="Faucet claims / day" sub={`last ${days} days`}>
           <Bars data={data.daily.map((d) => ({ ...d, value: d.faucets }))} color={C.green} />
@@ -154,17 +154,17 @@ function DashboardTab() {
       {/* Monthly social / content */}
       <Panel title="Social & content — monthly" sub="X follows · Instagram · Medium articles (last 6 months)" span>
         <div className="month-cards">
-          <StatCard label="X follows · this month" value={tm.follow_x || 0} sub={`${at.follow_x || 0} all-time`} accent={C.orange} icon="𝕏" />
-          <StatCard label="Instagram · this month" value={tm.follow_ig || 0} sub={`${at.follow_ig || 0} all-time`} accent={C.red} icon="◎" />
-          <StatCard label="Medium articles · this month" value={tm.medium || 0} sub={`${at.medium || 0} all-time`} accent={C.green} icon="✎" />
+          <StatCard label="X follows · this month" value={tm.follow_x || 0} sub={`${at.follow_x || 0} all-time`} accent={C.blue} />
+          <StatCard label="Instagram · this month" value={tm.follow_ig || 0} sub={`${at.follow_ig || 0} all-time`} accent={C.indigo} />
+          <StatCard label="Medium articles · this month" value={tm.medium || 0} sub={`${at.medium || 0} all-time`} accent={C.green} />
         </div>
         <Bars
           data={data.monthly}
           kind="month"
           height={170}
           series={[
-            { key: "follow_x", label: "X follows", color: C.orange },
-            { key: "follow_ig", label: "Instagram", color: C.red },
+            { key: "follow_x", label: "X follows", color: C.blue },
+            { key: "follow_ig", label: "Instagram", color: C.indigo },
             { key: "medium", label: "Medium", color: C.green },
           ]}
         />
@@ -175,18 +175,18 @@ function DashboardTab() {
         <Panel title="Content submissions — this month" sub="approved / credited posts">
           <div className="mini-stats">
             <MiniStat label="Medium" v={tm.medium} allt={at.medium} c={C.green} />
-            <MiniStat label="YouTube" v={tm.youtube} allt={at.youtube} c={C.red} />
-            <MiniStat label="TikTok" v={tm.tiktok} allt={at.tiktok} c={C.cyan} />
-            <MiniStat label="Instagram post" v={tm.instagram} allt={at.instagram} c={C.orange} />
-            <MiniStat label="Review" v={tm.review} allt={at.review} c={C.deep} />
-            <MiniStat label="Tweets" v={tm.tweet} allt={at.tweet} c={C.orange} />
+            <MiniStat label="YouTube" v={tm.youtube} allt={at.youtube} c={C.indigo} />
+            <MiniStat label="TikTok" v={tm.tiktok} allt={at.tiktok} c={C.sky} />
+            <MiniStat label="Instagram post" v={tm.instagram} allt={at.instagram} c={C.blue} />
+            <MiniStat label="Review" v={tm.review} allt={at.review} c={C.indigo} />
+            <MiniStat label="Tweets" v={tm.tweet} allt={at.tweet} c={C.blue} />
           </div>
         </Panel>
         <Panel title="Sign-in providers" sub="how activated users log in">
           <Donut
             parts={[
-              { label: "Google", value: u.google || 0, color: C.cyan },
-              { label: "X (Twitter)", value: u.twitter || 0, color: C.orange },
+              { label: "Google", value: u.google || 0, color: C.sky },
+              { label: "X (Twitter)", value: u.twitter || 0, color: C.blue },
             ]}
           />
           <div className="prov-rows">

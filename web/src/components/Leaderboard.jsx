@@ -5,7 +5,7 @@ import Icon from "./Icon";
 
 // Top-100 leaderboard with the daily rank-bonus legend.
 export default function Leaderboard() {
-  const { user, config, profile, refreshProfile } = useAuth();
+  const { user, config } = useAuth();
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState("");
   const lb = (config && config.leaderboard) || null;
@@ -36,16 +36,6 @@ export default function Leaderboard() {
         </h2>
         <span className="count">Top 100 · updates live</span>
       </div>
-
-      {profile && (
-        <NameEditor
-          current={profile.displayName || ""}
-          onSaved={async () => {
-            await refreshProfile();
-            load();
-          }}
-        />
-      )}
 
       {lb && lb.enabled && (
         <div className="panel" style={{ marginBottom: 16 }}>
@@ -102,61 +92,5 @@ export default function Leaderboard() {
         </div>
       )}
     </>
-  );
-}
-
-// Lets the user set the name shown on the leaderboard.
-function NameEditor({ current, onSaved }) {
-  const [name, setName] = useState(current);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState(null);
-  const [open, setOpen] = useState(false);
-
-  async function save() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      await api.setDisplayName({ name: name.trim() });
-      setMsg({ ok: true, text: "Saved! Your leaderboard name is updated." });
-      onSaved?.();
-      setOpen(false);
-    } catch (e) {
-      setMsg({ ok: false, text: errMessage(e) });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <div className="name-editor">
-        <span className="subtle">
-          Your leaderboard name: <b>{current || "Anon"}</b>
-        </span>
-        <button className="btn btn-sm btn-ghost" onClick={() => setOpen(true)}>
-          <Icon name="edit" size={15} /> Change name
-        </button>
-      </div>
-    );
-  }
-  return (
-    <div className="name-editor">
-      <input
-        className="task-input"
-        style={{ maxWidth: 260 }}
-        value={name}
-        maxLength={24}
-        placeholder="Your name (2–24 chars)"
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && !busy && name.trim().length >= 2 && save()}
-      />
-      <button className="btn btn-sm btn-primary" onClick={save} disabled={busy || name.trim().length < 2}>
-        {busy ? "Saving…" : "Save"}
-      </button>
-      <button className="btn btn-sm btn-ghost" onClick={() => setOpen(false)} disabled={busy}>
-        Cancel
-      </button>
-      {msg && <span className={`msg ${msg.ok ? "ok" : "err"}`} style={{ margin: 0 }}>{msg.text}</span>}
-    </div>
   );
 }
