@@ -8,8 +8,10 @@ import Faq from "./pages/Faq";
 import Guide from "./pages/Guide";
 import Dashboard from "./pages/Dashboard";
 import Activate from "./pages/Activate";
+import Referrals from "./pages/Referrals";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
+import NotFound from "./pages/NotFound";
 import { LINKS } from "./lib/chain";
 
 // Heavy routes (wallet pulls ethers + viem + the DEX SDK; admin is large and
@@ -132,9 +134,10 @@ export default function App() {
             element={!user ? <Login /> : isActive ? <Navigate to="/" replace /> : <Activate />}
           />
           <Route path="/settings" element={user ? <Settings /> : <Login />} />
+          <Route path="/referrals" element={user ? <Referrals /> : <Login />} />
           <Route path="/wallet" element={user ? <WalletPage /> : <Login />} />
           <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
       </main>

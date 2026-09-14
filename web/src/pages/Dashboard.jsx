@@ -24,6 +24,9 @@ export default function Dashboard() {
   const hasX = !!profile?.xHandle;
   const hasIG = !!profile?.igHandle;
   const done = () => refreshProfile();
+  // Once a follow is approved/credited, hide that quest so it doesn't show again.
+  const showFollowX = T.follow_x && !profile?.followXDone;
+  const showFollowIG = T.follow_ig && !profile?.followIgDone;
 
   return (
     <>
@@ -74,54 +77,58 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      <SectionHead title="Follow us" />
-      <div className="grid">
-        {T.follow_x && (
-          <TaskCard
-            title="Follow @PexliLabs on X"
-            desc="Follow @PexliLabs, then post a tweet tagging @PexliLabs and paste the link. Auto-verified, free."
-            points={P.follow_x}
-            icon="x"
-            cat="social"
-            buttonLabel="Verify tweet"
-            disabled={!hasX}
-            disabledNote="Save your X handle above first"
-            input={{ placeholder: "Paste your tweet link (must tag @PexliLabs)" }}
-            onSubmit={async (url) => (await api.submitFollow({ platform: "x", tweetUrl: url })).data}
-            onDone={done}
-          >
-            <div className="task-actions" style={{ marginTop: 0 }}>
-              <LinkOut href={LINKS.x}>Open @PexliLabs</LinkOut>
-              <a
-                className="btn btn-sm btn-ghost"
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
-                  "Just joined the @PexliLabs airdrop! #Pexli #PEX",
-                )}`}
-                target="_blank"
-                rel="noreferrer"
+      {(showFollowX || showFollowIG) && (
+        <>
+          <SectionHead title="Follow us" />
+          <div className="grid">
+            {showFollowX && (
+              <TaskCard
+                title="Follow @PexliLabs on X"
+                desc="Follow @PexliLabs, then post a tweet tagging @PexliLabs and paste the link. Auto-verified, free."
+                points={P.follow_x}
+                icon="x"
+                cat="social"
+                buttonLabel="Verify tweet"
+                disabled={!hasX}
+                disabledNote="Save your X handle above first"
+                input={{ placeholder: "Paste your tweet link (must tag @PexliLabs)" }}
+                onSubmit={async (url) => (await api.submitFollow({ platform: "x", tweetUrl: url })).data}
+                onDone={done}
               >
-                Post tweet <Icon name="external" size={15} />
-              </a>
-            </div>
-          </TaskCard>
-        )}
-        {T.follow_ig && (
-          <TaskCard
-            title="Follow on Instagram"
-            desc="Follow @PexliLab on Instagram, then verify — points are instant."
-            points={P.follow_ig}
-            icon="instagram"
-            cat="social"
-            buttonLabel="I followed — verify"
-            disabled={!hasIG}
-            disabledNote="Save your Instagram handle above first"
-            action={async () => (await api.submitFollow({ platform: "instagram" })).data}
-            onDone={done}
-          >
-            <LinkOut href={LINKS.instagram}>Open Instagram</LinkOut>
-          </TaskCard>
-        )}
-      </div>
+                <div className="task-actions" style={{ marginTop: 0 }}>
+                  <LinkOut href={LINKS.x}>Open @PexliLabs</LinkOut>
+                  <a
+                    className="btn btn-sm btn-ghost"
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                      "Just joined the @PexliLabs airdrop! #Pexli #PEX",
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Post tweet <Icon name="external" size={15} />
+                  </a>
+                </div>
+              </TaskCard>
+            )}
+            {showFollowIG && (
+              <TaskCard
+                title="Follow on Instagram"
+                desc="Follow @PexliLab on Instagram, then verify — points are instant."
+                points={P.follow_ig}
+                icon="instagram"
+                cat="social"
+                buttonLabel="I followed — verify"
+                disabled={!hasIG}
+                disabledNote="Save your Instagram handle above first"
+                action={async () => (await api.submitFollow({ platform: "instagram" })).data}
+                onDone={done}
+              >
+                <LinkOut href={LINKS.instagram}>Open Instagram</LinkOut>
+              </TaskCard>
+            )}
+          </div>
+        </>
+      )}
 
       {T.tweet && <TweetQuest points={P.tweet} hasX={hasX} onDone={done} />}
 
@@ -281,6 +288,11 @@ function ReferralCard({ profile, percent }) {
           <button className="btn btn-sm btn-primary" onClick={() => copy(code, "code")}>
             {copied === "code" ? "Copied" : code}
           </button>
+        </div>
+        <div className="task-actions mt">
+          <Link className="btn btn-sm btn-ghost" to="/referrals">
+            <Icon name="users" size={15} /> See who joined &amp; my earnings
+          </Link>
         </div>
       </div>
     </div>

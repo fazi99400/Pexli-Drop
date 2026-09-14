@@ -26,7 +26,8 @@ const getLeaderboard = onCall(CALL_OPTS, async (request) => {
     return {
       rank: i + 1,
       uid: d.id, // lets the client highlight the viewer's own row
-      name: u.xHandle || u.displayName || "Anon",
+      // Prefer the name the user set for themselves, then their X handle.
+      name: u.displayName || u.xHandle || "Anon",
       points: u.points || 0,
     };
   });

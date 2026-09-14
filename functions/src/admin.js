@@ -141,7 +141,11 @@ const approveSubmission = onCall(CALL_OPTS, async (request) => {
     const amount = row.points || 0;
 
     tx.set(ledgerRef, { status: "final" }, { merge: true });
-    tx.set(userRef, { points: FieldValue.increment(amount) }, { merge: true });
+    const userUpd = { points: FieldValue.increment(amount) };
+    // Mark the follow done on approval so its quest hides for the user.
+    if (row.taskType === "follow_x") userUpd.followXDone = true;
+    if (row.taskType === "follow_ig") userUpd.followIgDone = true;
+    tx.set(userRef, userUpd, { merge: true });
 
     // Referral bonus finalizes together with the approved submission.
     if (userSnap.exists) {

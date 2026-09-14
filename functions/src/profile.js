@@ -156,6 +156,62 @@ const getMe = onCall(CALL_OPTS, async (request) => {
   return publicProfile(data);
 });
 
+// Let the user set the display name that appears on the leaderboard. Kept to a
+// short, safe set of characters (letters/numbers/space and . _ -).
+const NAME_RE = /^[\p{L}\p{N} _.\-]{2,24}$/u;
+const setDisplayName = onCall(CALL_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const name = String(request.data?.name || "").trim().replace(/\s+/g, " ");
+  if (!NAME_RE.test(name)) {
+    throw new HttpsError("invalid-argument", "Name must be 2–24 letters, numbers, spaces or . _ -");
+  }
+  await db.collection("users").doc(uid).set({ displayName: name }, { merge: true });
+  return { displayName: name };
+});
+
+// "My referrals" — everyone who joined via the caller's referral code, with the
+// points the caller earned from each. Powers the dedicated /referrals page.
+const getMyReferrals = onCall(CALL_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const toMs = (t) => (t && t.toMillis ? t.toMillis() : null);
+
+  // People who set me as their referrer.
+  const referredSnap = await db.collection("users").where("referredBy", "==", uid).limit(1000).get();
+
+  // My referral earnings, grouped by the invited user that generated them. Query
+  // by my uid only (single-field, no composite index) and filter in memory.
+  const earnByUser = {};
+  let totalEarned = 0;
+  try {
+    const ledSnap = await db.collection("pointsLedger").where("uid", "==", uid).limit(5000).get();
+    for (const d of ledSnap.docs) {
+      const r = d.data();
+      if (r.taskType !== "referral") continue;
+      const src = r.sourceUid || "unknown";
+      earnByUser[src] = (earnByUser[src] || 0) + (r.points || 0);
+      totalEarned += r.points || 0;
+    }
+  } catch (e) {
+    console.warn("getMyReferrals ledger read failed:", e.message);
+  }
+
+  const rows = referredSnap.docs
+    .map((d) => {
+      const u = d.data();
+      return {
+        uid: d.id,
+        name: u.displayName || u.xHandle || "Anon",
+        wallet: u.walletAddress || "",
+        theirPoints: u.points || 0,
+        earnedFromThem: earnByUser[d.id] || 0,
+        joinedAt: toMs(u.createdAt),
+      };
+    })
+    .sort((a, b) => b.earnedFromThem - a.earnedFromThem || (b.joinedAt || 0) - (a.joinedAt || 0));
+
+  return { count: rows.length, totalEarned, rows };
+});
+
 // Bind the caller to a referrer via referral code. Set-once, no self-referral.
 const setReferrer = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
@@ -242,6 +298,8 @@ function publicProfile(d = {}) {
     igHandle: d.igHandle || null,
     walletAddress: d.walletAddress || null,
     points: d.points || 0,
+    followXDone: d.followXDone || false,
+    followIgDone: d.followIgDone || false,
     createdAt: d.createdAt || null,
     lastFaucetAt: d.lastFaucetAt || null,
     lastSwapAt: d.lastSwapAt || null,
@@ -259,6 +317,8 @@ module.exports = {
   getMe,
   setReferrer,
   setWallet,
+  setDisplayName,
+  getMyReferrals,
   publicProfile,
   ensureProfileDoc,
   providersFromToken,

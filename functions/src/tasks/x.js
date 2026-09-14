@@ -259,11 +259,47 @@ const verifyFollowX = onCall(CALL_OPTS, async (request) => {
     taskType: "follow_x",
     points: config.points.follow_x,
     refId: `${user.xUserId}:follows:${target}`,
+    userUpdates: { followXDone: true },
   });
   return { ok: true, ...result };
 });
 
 // --- Tweet pool: assign + verify -------------------------------------------
+// Built-in starter tweets so the pool is never empty out of the box (the admin
+// can add/disable more in Admin → Tweet Pool). Each mentions @PexliLabs so the
+// free oEmbed verification passes when the user posts it. Seeded on first use.
+const DEFAULT_TWEETS = [
+  "gm from the @PexliLabs chain ⚡ Testnet is live and the airdrop is on. #Pexli #PEX",
+  "Just claimed my testnet PEX from the @PexliLabs faucet 🚰 Fast, free, no gas drama. #Pexli #PEX",
+  "Swapped tokens in seconds on @PexliLabs ⚡ This testnet is smooth. #Pexli #PEX #Airdrop",
+  "@PexliLabs runs both Rust and Solidity smart contracts on one chain 🦀+⟠ Wild. #Pexli #PEX",
+  "Earning points every day in the @PexliLabs airdrop 🎯 Points convert to mainnet PEX. #Pexli #PEX",
+  "Non-custodial wallet, in-app swaps, real quests — @PexliLabs gets it right. #Pexli #PEX",
+  "Climbing the @PexliLabs leaderboard one quest at a time 🏆 Come catch me. #Pexli #PEX",
+  "If you're not on the @PexliLabs testnet airdrop yet, you're early. Don't sleep on it 👀 #Pexli #PEX",
+  "Did my daily on-chain tx on @PexliLabs today ✅ Easy points, real activity. #Pexli #PEX",
+  "The @PexliLabs faucet + swap + send all live in one dApp. No extensions needed 🔥 #Pexli #PEX",
+  "Referral link dropped 👇 Join the @PexliLabs airdrop and we both earn PEX. #Pexli #PEX",
+  "Testing @PexliLabs and honestly the UX is cleaner than most mainnets 😮 #Pexli #PEX",
+  "Rust lane 🦀 or Solidity lane ⟠ — build your way on @PexliLabs. #Pexli #PEX #Web3",
+  "Another day, another quest done on @PexliLabs 🎯 Stacking points for the PEX airdrop. #Pexli #PEX",
+  "Bullish on @PexliLabs — real tech, real testnet, real airdrop. 🚀 #Pexli #PEX",
+];
+
+// Seed the starter tweets when the pool is empty. Deterministic ids make it
+// idempotent under concurrent first-time assigns.
+async function seedDefaultTweets() {
+  const batch = db.batch();
+  DEFAULT_TWEETS.forEach((text, i) => {
+    batch.set(db.collection("tweetPool").doc(`seed_${i}`), {
+      text,
+      active: true,
+      timesAssigned: 0,
+    });
+  });
+  await batch.commit();
+}
+
 // Assign a random active tweet to the user (respects the 30-min cooldown).
 const assignTweet = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
@@ -285,13 +321,19 @@ const assignTweet = onCall(CALL_OPTS, async (request) => {
     if (pool.exists) return { text: pool.data().text, assignmentId: assignRef.id };
   }
 
-  // Pick a random active tweet, favoring the least-assigned ones.
-  const poolSnap = await db
+  // Pick a random active tweet, favoring the least-assigned ones. If the pool
+  // has never been populated, seed the built-in starter tweets first so the
+  // task works out of the box.
+  const query = db
     .collection("tweetPool")
     .where("active", "==", true)
     .orderBy("timesAssigned", "asc")
-    .limit(25)
-    .get();
+    .limit(25);
+  let poolSnap = await query.get();
+  if (poolSnap.empty) {
+    await seedDefaultTweets();
+    poolSnap = await query.get();
+  }
   if (poolSnap.empty) throw new HttpsError("failed-precondition", "No tweets available right now.");
   const docs = poolSnap.docs;
   const chosen = docs[Math.floor(Math.random() * docs.length)];
