@@ -632,3 +632,45 @@ img, svg, canvas, video { max-width: 100%; }
 .link-name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; flex-wrap: wrap; }
 .link-name .mono { color: var(--muted); font-weight: 500; }
 .badge.on { display: inline-flex; align-items: center; gap: 5px; }
+
+/* ============================================================
+   Light theme — warm cream + orange (opt-in via data-theme="light").
+   Only tokens + a few surfaces that hard-coded a dark value change;
+   everything else reads the tokens, so the whole UI recolours.
+   ============================================================ */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fbf6f0;
+  --bg-2: #fff4ea;
+  --bg-elev: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-2: #fbf3ea;
+  --border: #f0dcc6;
+  --border-soft: #f5e7d6;
+  --text: #2a1c10;
+  --muted: #8a715a;
+  --faint: #b09a84;
+  --accent: #e85d00;
+  --accent-2: #ff7a00;
+  --accent-ink: #ffffff;
+  --green: #12a150;
+  --red: #e5484d;
+  --amber: #d98a00;
+  --cyan: #3b5bdb;
+  --violet: #6f5cff;
+  --shadow: 0 14px 34px rgba(210, 120, 30, 0.16);
+}
+:root[data-theme="light"] body {
+  background-image:
+    radial-gradient(60rem 40rem at 78% -10%, rgba(255, 150, 60, 0.16), transparent 60%),
+    radial-gradient(50rem 40rem at 5% 0%, rgba(255, 170, 80, 0.12), transparent 55%);
+}
+:root[data-theme="light"] .header { background: rgba(255, 246, 238, 0.82); }
+/* Hovers that assumed a dark ground */
+:root[data-theme="light"] .btn-ghost:hover { background: rgba(0, 0, 0, 0.04); }
+:root[data-theme="light"] .faq-item summary:hover,
+:root[data-theme="light"] tbody tr:hover { background: rgba(0, 0, 0, 0.03); }
+:root[data-theme="light"] .btn:hover { border-color: #e6c9a6; }
+:root[data-theme="light"] .task-card:hover { border-color: #e6c9a6; }
+/* Referral gradient border reads better a touch stronger on white */
+:root[data-theme="light"] .referral-inner { background: linear-gradient(180deg, #fff, #fdf6ee); }

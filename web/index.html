@@ -3,12 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="theme-color" content="#0b0906" />
     <title>Pexli Airdrop — Earn PEX</title>
     <meta
       name="description"
       content="Complete on-chain and social quests to earn Pexli (PEX) airdrop points."
     />
+    <!-- Apply the saved theme before first paint so there's no light/dark flash. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("pexli_theme");
+          if (t === "light" || t === "dark") {
+            document.documentElement.setAttribute("data-theme", t);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

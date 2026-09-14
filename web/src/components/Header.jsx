@@ -1,6 +1,40 @@
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Icon from "./Icon";
+
+// Light / dark theme toggle. The saved theme is applied pre-paint by the inline
+// script in index.html; here we just flip it and persist.
+function ThemeToggle() {
+  const [theme, setTheme] = useState(() => {
+    try {
+      return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    } catch (e) {
+      return "dark";
+    }
+  });
+  useEffect(() => {
+    try {
+      if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
+      else document.documentElement.removeAttribute("data-theme");
+      localStorage.setItem("pexli_theme", theme);
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", theme === "light" ? "#fbf6f0" : "#0b0906");
+    } catch (e) {
+      /* storage blocked — ignore */
+    }
+  }, [theme]);
+  return (
+    <button
+      className="btn btn-sm btn-ghost"
+      onClick={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
+      title={theme === "light" ? "Switch to dark" : "Switch to light"}
+      aria-label="Toggle theme"
+    >
+      <Icon name={theme === "light" ? "moon" : "sun"} size={16} />
+    </button>
+  );
+}
 
 export default function Header() {
   const { user, profile, isAdmin, logout } = useAuth();
@@ -15,6 +49,7 @@ export default function Header() {
         </Link>
 
         <div className="row">
+          <ThemeToggle />
           {!user && (
             <>
               <Link className="btn btn-sm btn-ghost hide-sm" to="/guide">Guide</Link>
