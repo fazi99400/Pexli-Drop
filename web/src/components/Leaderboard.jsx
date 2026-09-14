@@ -74,7 +74,7 @@ export default function Leaderboard() {
               {rows.map((row) => {
                 const me = user && row.uid === user.uid;
                 return (
-                  <tr key={row.uid} style={me ? { background: "rgba(198,242,78,0.10)" } : undefined}>
+                  <tr key={row.uid} style={me ? { background: "rgba(255, 154, 61,0.10)" } : undefined}>
                     <td>
                       <span className={rankClass(row.rank)}>{row.rank}</span>
                     </td>
