@@ -15,6 +15,12 @@ export default function Header() {
         </Link>
 
         <div className="row">
+          {!user && (
+            <>
+              <Link className="btn btn-sm btn-ghost hide-sm" to="/guide">Guide</Link>
+              <Link className="btn btn-sm btn-ghost hide-sm" to="/faq">FAQ</Link>
+            </>
+          )}
           {user && (
             <span className="points-pill">
               <span className="dot" />
