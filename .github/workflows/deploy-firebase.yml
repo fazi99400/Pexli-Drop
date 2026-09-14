@@ -104,6 +104,24 @@ jobs:
             done
           done
 
+      # Delete retired functions' Cloud Run services to free CPU quota. These
+      # were replaced (verifyFaucet→claimFaucet, verifySwap/verifyTx→verifyTxHash)
+      # and are no longer in index.js, so scoped deploys never remove them; do it
+      # explicitly. Freeing ~3 services gives the remaining ones healthcheck
+      # headroom under the tight per-region quota.
+      - name: Delete retired functions (free CPU quota)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+          gcloud config set project pexli-drop --quiet
+          for svc in verifyfaucet verifyswap verifytx; do
+            if gcloud run services describe "$svc" --region=us-central1 >/dev/null 2>&1; then
+              echo "→ deleting retired service $svc"
+              gcloud run services delete "$svc" --region=us-central1 --quiet || true
+            fi
+          done
+
       # Deploy in small batches. A full "deploy --only functions" spins up a
       # healthcheck container for EVERY function at once; ~28 of those plus the
       # already-serving revisions blow past the project's Cloud Run CPU quota, so
