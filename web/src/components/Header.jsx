@@ -19,7 +19,7 @@ function ThemeToggle() {
       else document.documentElement.removeAttribute("data-theme");
       localStorage.setItem("pexli_theme", theme);
       const meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", theme === "light" ? "#fbf6f0" : "#0b0906");
+      if (meta) meta.setAttribute("content", theme === "light" ? "#f5f6f8" : "#0a0b0d");
     } catch (e) {
       /* storage blocked — ignore */
     }
@@ -70,6 +70,11 @@ export default function Header() {
           {user && (
             <button className="btn btn-sm btn-ghost" onClick={() => navigate("/wallet")} title="Wallet">
               <Icon name="wallet" size={16} /> <span className="hide-sm">Wallet</span>
+            </button>
+          )}
+          {user && (
+            <button className="btn btn-sm btn-ghost" onClick={() => navigate("/referrals")} title="Referrals">
+              <Icon name="users" size={16} /> <span className="hide-sm">Referrals</span>
             </button>
           )}
           {user && (
