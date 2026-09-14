@@ -3,6 +3,7 @@ import {
   onAuthStateChanged,
   signInWithPopup,
   signOut,
+  getAdditionalUserInfo,
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db, googleProvider, twitterProvider, firebaseConfigured } from "../firebase";
@@ -116,7 +117,24 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signInGoogle = () => signInWithPopup(auth, googleProvider);
-  const signInX = () => signInWithPopup(auth, twitterProvider);
+  // Signing in with X also captures the X handle automatically, so the user
+  // never has to press a separate "Connect X" — it's verified once, at sign-up,
+  // and simply re-confirmed on later logins. Best-effort: if it fails, the user
+  // can still connect X manually from Settings.
+  const signInX = async () => {
+    const result = await signInWithPopup(auth, twitterProvider);
+    try {
+      const info = getAdditionalUserInfo(result);
+      const username = info?.username || result?._tokenResponse?.screenName || null;
+      if (username) {
+        await api.setSocialHandle({ platform: "x", handle: String(username).replace(/^@/, "") });
+        await refreshProfile();
+      }
+    } catch (e) {
+      console.warn("auto X-handle capture failed", e?.message);
+    }
+    return result;
+  };
   const logout = () => signOut(auth);
 
   // Account is "active" (can enter the airdrop) once it has a reward wallet AND

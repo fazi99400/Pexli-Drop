@@ -1,8 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { SocialCard } from "../components/Account";
 import { WalletOnboard } from "../components/InAppWallet";
+import { getStoredAddress } from "../lib/localWallet";
+import { api } from "../lib/functions";
 import Icon from "../components/Icon";
 
 // Onboarding: the user creates/imports their in-app Pexli wallet + links an X
@@ -11,10 +13,28 @@ import Icon from "../components/Icon";
 export default function Activate() {
   const { profile, isActive, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const syncedRef = useRef(false);
 
   useEffect(() => {
     if (isActive) navigate("/", { replace: true });
   }, [isActive, navigate]);
+
+  // If a wallet already exists on this device (address known even while locked)
+  // but the server hasn't recorded it yet, save the public address so the
+  // account activates — no need to unlock again. Only the address is sent.
+  useEffect(() => {
+    if (syncedRef.current || !profile) return;
+    const stored = getStoredAddress();
+    if (stored && !profile.walletAddress) {
+      syncedRef.current = true;
+      api
+        .setWallet({ walletAddress: stored })
+        .then(() => refreshProfile())
+        .catch(() => {
+          syncedRef.current = false; // allow a later retry
+        });
+    }
+  }, [profile, refreshProfile]);
 
   const hasWallet = !!profile?.walletAddress;
   const hasX = !!profile?.xHandle;
