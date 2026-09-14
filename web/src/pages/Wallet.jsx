@@ -47,14 +47,43 @@ function TxLink({ hash }) {
   );
 }
 
+// Cooldown helpers. Firestore Timestamps arrive over the callable as
+// { _seconds, _nanoseconds } (sometimes ISO/number), so normalize to millis and
+// compute how many minutes are left on a task's lock. Zero = ready now.
+function toMillis(ts) {
+  if (!ts) return 0;
+  if (typeof ts === "number") return ts;
+  if (typeof ts === "string") {
+    const d = Date.parse(ts);
+    return Number.isNaN(d) ? 0 : d;
+  }
+  const s = ts._seconds ?? ts.seconds;
+  return s != null ? s * 1000 : 0;
+}
+function cooldownRemainingMin(lastTs, lockHrs) {
+  const last = toMillis(lastTs);
+  if (!last || !lockHrs) return 0;
+  const remainHrs = lockHrs - (Date.now() - last) / 3600000;
+  return remainHrs > 0 ? Math.ceil(remainHrs * 60) : 0;
+}
+function fmtWait(min) {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 // --- Faucet: 1-click claim (server sends PEX to the wallet) ------------------
 function FaucetCard() {
-  const { config, refreshProfile } = useAuth();
+  const { config, profile, refreshProfile } = useAuth();
   const { refreshBalance } = useWallet();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const amount = config?.faucet?.amountPex || "0.05";
   const points = config?.points?.faucet ?? 20;
+  const lockHrs = config?.locks?.faucetHrs ?? 24;
+  const waitMin = cooldownRemainingMin(profile?.lastFaucetAt, lockHrs);
+  const onCooldown = waitMin > 0;
 
   async function claim() {
     setBusy(true);
@@ -80,8 +109,8 @@ function FaucetCard() {
       <p className="task-desc">
         Claim <b>{amount} PEX</b> straight to your wallet — one click, no external site. Available once every {config?.locks?.faucetHrs ?? 24}h.
       </p>
-      <button className="btn btn-primary" onClick={claim} disabled={busy}>
-        {busy ? "Sending…" : `Claim ${amount} PEX`}
+      <button className="btn btn-primary" onClick={claim} disabled={busy || onCooldown}>
+        {busy ? "Sending…" : onCooldown ? `Available in ${fmtWait(waitMin)}` : `Claim ${amount} PEX`}
       </button>
       {msg && (
         <p className={`msg ${msg.ok ? "ok" : "err"}`}>
@@ -96,7 +125,10 @@ function FaucetCard() {
 // SDK-backed (pools + quote from @lifelox/dex-sdk), signed by the in-app wallet.
 function SwapCard() {
   const { signer, refreshBalance } = useWallet();
+  const { config, profile, refreshProfile } = useAuth();
   const amount = SWAP_CONFIG.fixedAmountPex || "0.0004";
+  const points = config?.points?.swap ?? 30;
+  const lockHrs = config?.locks?.swapHrs ?? 12;
   const [pools, setPools] = useState(null);
   const [outTokens, setOutTokens] = useState([]); // tokens that have a PEX pool
   const [loadErr, setLoadErr] = useState("");
@@ -105,8 +137,25 @@ function SwapCard() {
   const [step, setStep] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [pendingHash, setPendingHash] = useState(null); // swapped, points not yet awarded
 
   const tokenOut = outTokens.find((t) => tokenKey(t) === outKey);
+  const waitMin = cooldownRemainingMin(profile?.lastSwapAt, lockHrs);
+  const onCooldown = waitMin > 0 && !pendingHash;
+
+  // Award the swap-task points from the swap tx hash (idempotent server-side).
+  async function awardSwap(hash) {
+    setStep("Confirming…");
+    try {
+      const res = await api.verifyTxHash({ hash, taskType: "swap" });
+      setMsg({ ok: true, hash: res.data.txHash, text: `Swap complete (+${points} pts)` });
+      setPendingHash(null);
+      refreshProfile();
+    } catch (e) {
+      setPendingHash(hash);
+      setMsg({ ok: false, text: `Swap done, but awarding points failed (${e?.shortMessage || errMessage(e)}). Tap "Get points".` });
+    }
+  }
 
   // Load pools + the tokens that can actually be bought with PEX (a direct pool
   // with PEX). The user only chooses which of these to receive.
@@ -154,6 +203,13 @@ function SwapCard() {
 
   async function doSwap() {
     if (!signer || !q?.pool || !tokenOut) return;
+    // Gate on cooldown BEFORE signing so we never spend PEX on a swap that
+    // can't earn points yet.
+    const wait = cooldownRemainingMin(profile?.lastSwapAt, lockHrs);
+    if (wait > 0) {
+      setMsg({ ok: false, text: `Swap is on cooldown — try again in ${fmtWait(wait)}.` });
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -165,8 +221,9 @@ function SwapCard() {
         pool: q.pool,
         onStep: setStep,
       });
-      setMsg({ ok: true, hash: receipt.hash, text: "Swap complete" });
+      setPendingHash(receipt.hash);
       setTimeout(() => refreshBalance(), 1500);
+      await awardSwap(receipt.hash);
     } catch (e) {
       setMsg({ ok: false, text: e?.shortMessage || e?.reason || e?.message || "Swap failed." });
     } finally {
@@ -175,11 +232,22 @@ function SwapCard() {
     }
   }
 
+  async function retrySwap() {
+    setBusy(true);
+    await awardSwap(pendingHash);
+    setBusy(false);
+    setStep("");
+  }
+
   return (
     <div className="panel">
-      <h3 className="card-title"><Icon name="swap" /> Swap</h3>
+      <div className="row spread">
+        <h3 className="card-title"><Icon name="swap" /> Swap</h3>
+        <span className="badge">+{points} pts</span>
+      </div>
       <p className="task-desc">
         Swap <b>{amount} PEX</b> for a token of your choice — one tap, signed by your own wallet.
+        Earns points once every {lockHrs}h.
       </p>
       {!pools && !loadErr && <p className="subtle">Loading pools…</p>}
       {loadErr && <p className="msg err">{loadErr}</p>}
@@ -200,9 +268,16 @@ function SwapCard() {
           <p className="kv">
             You receive: <b className="accent">{q ? `${Number(q.amountOut).toFixed(6)} ${tokenOut?.symbol || ""}` : "…"}</b>
           </p>
-          <button className="btn btn-primary" onClick={doSwap} disabled={busy || !q?.pool}>
-            {busy ? (step || "Working…") : `Swap ${amount} PEX`}
-          </button>
+          <div className="row">
+            <button className="btn btn-primary" onClick={doSwap} disabled={busy || !q?.pool || onCooldown || !!pendingHash}>
+              {busy ? (step || "Working…") : onCooldown ? `Available in ${fmtWait(waitMin)}` : `Swap ${amount} PEX`}
+            </button>
+            {pendingHash && (
+              <button className="btn btn-sm" onClick={retrySwap} disabled={busy}>
+                {busy ? "…" : "Get points"}
+              </button>
+            )}
+          </div>
         </>
       )}
       {msg && (
@@ -226,7 +301,7 @@ function tokenKey(t) {
 // No address field — it always goes to the fixed Pexli address and earns the
 // tx-task points. Verified server-side by tx hash over RPC (no explorer).
 function SendToPexliCard() {
-  const { config, refreshProfile } = useAuth();
+  const { config, profile, refreshProfile } = useAuth();
   const { signer, refreshBalance } = useWallet();
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState("");
@@ -234,6 +309,9 @@ function SendToPexliCard() {
   const [pendingHash, setPendingHash] = useState(null); // sent, points not yet awarded
   const amount = config?.tx?.amountPex || "0.0004";
   const points = config?.points?.tx ?? 15;
+  const lockHrs = config?.locks?.txHrs ?? 1;
+  const waitMin = cooldownRemainingMin(profile?.lastTxAt, lockHrs);
+  const onCooldown = waitMin > 0 && !pendingHash;
 
   // Award points for an already-sent tx (idempotent server-side). Kept separate
   // so a transient verify failure never loses the PEX the user already sent.
@@ -253,6 +331,13 @@ function SendToPexliCard() {
 
   async function send() {
     if (!signer) return;
+    // Gate on cooldown BEFORE sending so PEX is never spent when no points can
+    // be earned yet.
+    const wait = cooldownRemainingMin(profile?.lastTxAt, lockHrs);
+    if (wait > 0) {
+      setMsg({ ok: false, text: `Already sent recently — try again in ${fmtWait(wait)}.` });
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -294,8 +379,8 @@ function SendToPexliCard() {
         Repeats every {config?.locks?.txHrs ?? 1}h.
       </p>
       <div className="row">
-        <button className="btn btn-primary" onClick={send} disabled={busy || !!pendingHash}>
-          {busy ? (step || "Working…") : `Send ${amount} PEX`}
+        <button className="btn btn-primary" onClick={send} disabled={busy || !!pendingHash || onCooldown}>
+          {busy ? (step || "Working…") : onCooldown ? `Available in ${fmtWait(waitMin)}` : `Send ${amount} PEX`}
         </button>
         {pendingHash && (
           <button className="btn btn-sm" onClick={retry} disabled={busy}>
