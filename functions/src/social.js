@@ -109,6 +109,7 @@ const submitFollow = onCall(CALL_OPTS, async (request) => {
       taskType: "follow_x",
       points: config.points.follow_x,
       refId: `follow_x:${uid}`,
+      userUpdates: { followXDone: true },
     });
     return { ok: true, ...result, status: "final", message: "Verified! Points added." };
   }
@@ -121,6 +122,8 @@ const submitFollow = onCall(CALL_OPTS, async (request) => {
     points: config.points[taskType],
     refId: `${taskType}:${uid}`,
     status,
+    // Only hide the quest once it's actually credited (not while pending review).
+    userUpdates: status === "final" ? { followIgDone: true } : {},
   });
   return {
     ok: true,

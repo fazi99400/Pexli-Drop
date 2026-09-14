@@ -55,6 +55,8 @@ exports.ensureProfile = profile.ensureProfile;
 exports.getMe = profile.getMe;
 exports.setWallet = profile.setWallet;
 exports.setReferrer = profile.setReferrer;
+exports.setDisplayName = profile.setDisplayName;
+exports.getMyReferrals = profile.getMyReferrals;
 
 // On-chain tasks are now handled in-app: the faucet dispenses (claimFaucet),
 // and swaps / "send PEX" are verified from the tx hash over RPC (verifyTxHash).
