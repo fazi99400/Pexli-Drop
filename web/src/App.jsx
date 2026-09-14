@@ -3,6 +3,9 @@ import { Routes, Route, Navigate, Link } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import Header from "./components/Header";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
+import Faq from "./pages/Faq";
+import Guide from "./pages/Guide";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Activate from "./pages/Activate";
@@ -93,7 +96,7 @@ export default function App() {
   // The main app area, gated by sign-in + activation. Terms/Privacy are always
   // public; Settings/Activate are reachable while signed in.
   function MainRoutes() {
-    if (!user) return <Login />;
+    if (!user) return <Landing />;
     if (!isActive) return <Navigate to="/activate" replace />;
     return <Dashboard />;
   }
@@ -116,6 +119,8 @@ export default function App() {
           <Route path="/" element={<MainRoutes />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/faq" element={<Faq />} />
+          <Route path="/guide" element={<Guide />} />
           <Route path="/wallet-security" element={<WalletSecurity />} />
           <Route
             path="/activate"
@@ -131,6 +136,8 @@ export default function App() {
         <div className="container">
           <div className="row spread">
             <div>
+              <Link to="/guide">Guide</Link>
+              <Link to="/faq">FAQ</Link>
               <a href={LINKS.main}>Pexli</a>
               <a href={LINKS.faucet}>Faucet</a>
               <a href={LINKS.dex}>Lifelox</a>
