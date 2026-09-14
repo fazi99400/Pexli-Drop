@@ -21,19 +21,23 @@
 // so the total reserved CPU stays small. Raise these (and/or request a quota
 // bump) once the airdrop grows. Must run BEFORE the function modules are loaded.
 const { setGlobalOptions } = require("firebase-functions/v2");
-// A new GCP project ships with a small Cloud Run CPU quota per region, and each
-// of our ~28 functions is a separate Cloud Run service. The deploy-time quota
-// check is roughly sum(maxInstances * cpu) across services, so we keep both
-// low: 1 max instance per function. (cpu must stay >= 1 while concurrency > 1,
-// so we can't shrink CPU further without serializing requests.) concurrency:80
-// means one instance still serves plenty of simultaneous requests for an early
-// airdrop. Raise these (or request a Cloud Run CPU quota bump) as it grows.
+// A new GCP project ships with a SMALL Cloud Run CPU quota per region, and each
+// function is its own Cloud Run service. The deploy-time quota check is roughly
+// sum(maxInstances * cpu) across services, so with ~24 services at cpu:1 we blew
+// past it and most functions failed to update.
+//
+// Fix: default every function to a FRACTIONAL cpu (0.5) so the whole set fits.
+// Fractional CPU requires concurrency:1, which is fine for the fast Firestore
+// handlers (each finishes in well under a second). The two SLOW functions that
+// hold a request open for many seconds — claimFaucet (sends PEX + waits) and
+// verifyTxHash (polls for a receipt) — override this with cpu:1/concurrency:80
+// so they never serialize. Raise all of this once the CPU quota is bumped.
 setGlobalOptions({
   region: "us-central1",
   memory: "256MiB",
-  cpu: 1,
+  cpu: 0.5,
   maxInstances: 1,
-  concurrency: 80,
+  concurrency: 1,
 });
 
 require("./src/init");

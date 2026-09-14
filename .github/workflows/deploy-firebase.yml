@@ -153,7 +153,7 @@ jobs:
           for fn in $FNS; do
             if [ -z "$BATCH" ]; then BATCH="functions:$fn"; else BATCH="$BATCH,functions:$fn"; fi
             N=$((N + 1))
-            if [ "$N" -ge 6 ]; then deploy_batch "$BATCH"; BATCH=""; N=0; fi
+            if [ "$N" -ge 4 ]; then deploy_batch "$BATCH"; BATCH=""; N=0; fi
           done
           deploy_batch "$BATCH"
 
