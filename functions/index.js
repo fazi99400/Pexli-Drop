@@ -81,6 +81,7 @@ exports.assignTweet = x.assignTweet; // API-free: picks a random pool tweet
 // Optional X OAuth connect (free — only to verify a real account). Works once a
 // free X app's X_CLIENT_ID / X_CLIENT_SECRET are configured.
 exports.xAuthStart = x.xAuthStart;
+exports.xLoginStart = x.xLoginStart; // sign in / sign up with X (custom token)
 exports.xCallback = x.xCallback;
 
 // Admin

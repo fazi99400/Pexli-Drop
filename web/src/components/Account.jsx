@@ -1,6 +1,90 @@
 import { useState } from "react";
 import { api, errMessage } from "../lib/functions";
+import { useAuth } from "../context/AuthContext";
 import Icon from "./Icon";
+
+// Activation "link both logins" card. Every account must have BOTH a Google and
+// an X login linked (one person → one Google → one X). Whichever the user did
+// NOT sign up with is offered as a Connect button here. Uniqueness is enforced
+// server-side: Google natively (auth/credential-already-in-use), X via xIndex.
+export function AccountLinks({ profile, onSaved }) {
+  const { googleLinked, xLinked, linkGoogle } = useAuth();
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+
+  async function connectX() {
+    setBusy("x");
+    setErr("");
+    try {
+      const res = await api.xAuthStart();
+      window.location.href = res.data.url;
+    } catch (e) {
+      setErr(errMessage(e));
+      setBusy("");
+    }
+  }
+
+  async function connectGoogle() {
+    setBusy("google");
+    setErr("");
+    try {
+      await linkGoogle();
+      onSaved?.();
+    } catch (e) {
+      if (e?.code === "auth/credential-already-in-use") {
+        setErr("That Google account is already linked to another Pexli account.");
+      } else if (e?.code === "auth/popup-closed-by-user") {
+        /* user cancelled — no error */
+      } else {
+        setErr(e?.message || "Could not link Google.");
+      }
+      setBusy("");
+    }
+  }
+
+  return (
+    <div className="panel">
+      <h3 className="card-title"><Icon name="users" /> Link both logins</h3>
+      <p className="task-desc">
+        Connect <b>both</b> Google and X to your account. Each can be linked to only one Pexli
+        account, and you can then sign in with either.
+      </p>
+      {err && <p className="msg err">{err}</p>}
+
+      <div className="link-row">
+        <span className="link-name">
+          <Icon name="users" size={16} /> Google
+          {profile?.email && <span className="mono">{profile.email}</span>}
+        </span>
+        {googleLinked ? (
+          <span className="badge on"><Icon name="check" size={13} /> Linked</span>
+        ) : (
+          <button className="btn btn-sm btn-primary" onClick={connectGoogle} disabled={busy === "google"}>
+            {busy === "google" ? "…" : "Connect Google"}
+          </button>
+        )}
+      </div>
+
+      <div className="link-row">
+        <span className="link-name">
+          <Icon name="x" size={16} /> X (Twitter)
+          {profile?.xHandle && <span className="mono">@{profile.xHandle}</span>}
+        </span>
+        {xLinked ? (
+          <span className="badge on"><Icon name="check" size={13} /> Linked</span>
+        ) : (
+          <button className="btn btn-sm btn-primary" onClick={connectX} disabled={busy === "x"}>
+            {busy === "x" ? "…" : "Connect X"}
+          </button>
+        )}
+      </div>
+
+      <div className="wl-sep" />
+      <HandleRow icon="instagram" label="Instagram (optional)" placeholder="your Instagram handle"
+        saved={profile?.igHandle} platform="instagram" onSaved={onSaved} />
+    </div>
+  );
+}
 
 // Socials card — save X / Instagram handles, optional X connect.
 export function SocialCard({ profile, onSaved }) {

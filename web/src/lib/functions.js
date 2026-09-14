@@ -22,6 +22,7 @@ export const api = {
   assignTweet: call("assignTweet"),
   verifyTweetPublic: call("verifyTweetPublic"),
   xAuthStart: call("xAuthStart"),
+  xLoginStart: call("xLoginStart"),
 
   // Admin
   updateConfig: call("updateConfig"),

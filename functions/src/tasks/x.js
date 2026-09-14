@@ -4,9 +4,10 @@
 // the config.tasks.{tweet,follow_x} toggles and can be shipped disabled.
 const crypto = require("crypto");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { db, FieldValue, Timestamp } = require("../init");
+const { admin, db, FieldValue, Timestamp } = require("../init");
 const { CALL_OPTS, requireAuth, loadUser, requireTaskEnabled } = require("../callable");
 const { awardPoints } = require("../points");
+const { ensureProfileDoc } = require("../profile");
 const { minutesSince } = require("../util");
 const params = require("../params");
 
@@ -37,10 +38,16 @@ const xAuthStart = onCall(CALL_OPTS, async (request) => {
   await db.collection("xOauth").doc(state).set({
     uid,
     verifier,
+    mode: "connect",
     createdAt: Timestamp.now(),
   });
 
-  const url =
+  return { url: authorizeUrl(clientId, state, challenge) };
+});
+
+// Build the X authorize URL (shared by connect + login).
+function authorizeUrl(clientId, state, challenge) {
+  return (
     "https://twitter.com/i/oauth2/authorize?" +
     new URLSearchParams({
       response_type: "code",
@@ -50,8 +57,27 @@ const xAuthStart = onCall(CALL_OPTS, async (request) => {
       state,
       code_challenge: challenge,
       code_challenge_method: "S256",
-    }).toString();
-  return { url };
+    }).toString()
+  );
+}
+
+// --- Sign in / sign up with X (no Firebase auth required) -------------------
+// Public callable: start an X OAuth flow whose callback mints a Firebase custom
+// token, so a visitor can create/enter their account with X — reusing the same
+// X app as the connect flow (no Firebase "Twitter provider" console setup, which
+// needs OAuth 1.0a keys, is required). State is marked mode:"login".
+const xLoginStart = onCall(CALL_OPTS, async () => {
+  const clientId = params.X_CLIENT_ID.value();
+  if (!clientId) throw new HttpsError("failed-precondition", "X sign-in is not configured yet.");
+  const state = b64url(crypto.randomBytes(24));
+  const { verifier, challenge } = makePkce();
+  await db.collection("xOauth").doc(state).set({
+    uid: null,
+    verifier,
+    mode: "login",
+    createdAt: Timestamp.now(),
+  });
+  return { url: authorizeUrl(clientId, state, challenge) };
 });
 
 // Step 2 (HTTP, X redirects here): exchange code, load the X user, enforce
@@ -65,7 +91,9 @@ const xCallback = onRequest({ region: "us-central1" }, async (req, res) => {
 
   const stateSnap = await db.collection("xOauth").doc(String(state)).get();
   if (!stateSnap.exists) return back("expired");
-  const { uid, verifier } = stateSnap.data();
+  const st = stateSnap.data();
+  const verifier = st.verifier;
+  const mode = st.mode || (st.uid ? "connect" : "login");
   await stateSnap.ref.delete();
 
   try {
@@ -75,8 +103,28 @@ const xCallback = onRequest({ region: "us-central1" }, async (req, res) => {
     const xHandle = me?.data?.username || null;
     if (!xUserId) return back("no_user");
 
-    // One X account → one platform account.
+    // Resolve which Firebase account this X identity belongs to.
+    //  - connect mode: link X to the already-signed-in uid (from state).
+    //  - login mode: find the account already holding this X id, or create a
+    //    brand-new Firebase user for a first-time X sign-up.
+    let uid = st.uid || null;
     const idxRef = db.collection("xIndex").doc(xUserId);
+
+    if (mode === "login") {
+      const idxSnap = await idxRef.get();
+      if (idxSnap.exists) {
+        uid = idxSnap.data().uid;
+      } else {
+        const rec = await admin.auth().createUser({
+          displayName: xHandle ? `@${xHandle}` : undefined,
+        });
+        uid = rec.uid;
+      }
+      // Guarantee a full profile (referral code etc.) for a fresh X account.
+      await ensureProfileDoc(uid, { displayName: xHandle ? `@${xHandle}` : "", provider: "twitter" });
+    }
+
+    // One X account → one platform account (enforced for both modes).
     const userRef = db.collection("users").doc(uid);
     await db.runTransaction(async (tx) => {
       const idxSnap = await tx.get(idxRef);
@@ -93,6 +141,13 @@ const xCallback = onRequest({ region: "us-central1" }, async (req, res) => {
       expiresAt: Date.now() + (token.expires_in || 7200) * 1000,
       updatedAt: Timestamp.now(),
     });
+
+    // Login mode returns a Firebase custom token the client exchanges for a
+    // session (signInWithCustomToken); connect mode just returns to the app.
+    if (mode === "login") {
+      const customToken = await admin.auth().createCustomToken(uid);
+      return res.redirect(`${appBase}/?xt=${encodeURIComponent(customToken)}`);
+    }
     return back("connected");
   } catch (e) {
     if (e.message === "x_taken") return back("x_taken");
@@ -301,4 +356,4 @@ function normalizeTweetText(s) {
   return String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-module.exports = { xAuthStart, xCallback, verifyFollowX, assignTweet, verifyTweet };
+module.exports = { xAuthStart, xLoginStart, xCallback, verifyFollowX, assignTweet, verifyTweet };

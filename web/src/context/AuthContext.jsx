@@ -2,11 +2,12 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithCustomToken,
+  linkWithPopup,
   signOut,
-  getAdditionalUserInfo,
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db, googleProvider, twitterProvider, firebaseConfigured } from "../firebase";
+import { auth, db, googleProvider, firebaseConfigured } from "../firebase";
 import { api } from "../lib/functions";
 import { DEFAULT_CONFIG } from "../lib/defaultConfig";
 
@@ -25,6 +26,23 @@ function captureRefFromUrl() {
   }
 }
 captureRefFromUrl();
+
+// The X sign-in callback returns ?xt=<firebase custom token>. Grab it (once)
+// and strip it from the URL so a refresh can't replay it.
+function takeXToken() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("xt");
+    if (!t) return null;
+    params.delete("xt");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    return t;
+  } catch (e) {
+    return null;
+  }
+}
+const PENDING_X_TOKEN = takeXToken();
 
 function safeRemove(k) {
   try {
@@ -74,6 +92,16 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Exchange the X sign-in custom token (from ?xt=) for a Firebase session.
+  // Runs once, before we decide the user is signed out.
+  const [xTokenPending, setXTokenPending] = useState(!!PENDING_X_TOKEN);
+  useEffect(() => {
+    if (!PENDING_X_TOKEN || !firebaseConfigured) return;
+    signInWithCustomToken(auth, PENDING_X_TOKEN)
+      .catch((e) => console.warn("X sign-in failed", e?.message))
+      .finally(() => setXTokenPending(false));
+  }, []);
+
   // Auth state → ensure profile exists, read admin claim, apply referral.
   useEffect(() => {
     if (!firebaseConfigured) {
@@ -117,42 +145,56 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signInGoogle = () => signInWithPopup(auth, googleProvider);
-  // Signing in with X also captures the X handle automatically, so the user
-  // never has to press a separate "Connect X" — it's verified once, at sign-up,
-  // and simply re-confirmed on later logins. Best-effort: if it fails, the user
-  // can still connect X manually from Settings.
+
+  // Sign up / sign in with X. We don't use Firebase's native Twitter provider
+  // (that needs OAuth 1.0a keys configured in the console); instead we start our
+  // own X OAuth flow whose callback returns a Firebase custom token — see
+  // functions/src/tasks/x.js. This reuses the same X app as the connect flow.
   const signInX = async () => {
-    const result = await signInWithPopup(auth, twitterProvider);
-    try {
-      const info = getAdditionalUserInfo(result);
-      const username = info?.username || result?._tokenResponse?.screenName || null;
-      if (username) {
-        await api.setSocialHandle({ platform: "x", handle: String(username).replace(/^@/, "") });
-        await refreshProfile();
-      }
-    } catch (e) {
-      console.warn("auto X-handle capture failed", e?.message);
-    }
-    return result;
+    const res = await api.xLoginStart();
+    window.location.href = res.data.url;
   };
+
+  // Link the OTHER provider during activation. Google is a native Firebase
+  // provider, so linking it enforces one-Google-per-account for free (a Google
+  // already on another account throws auth/credential-already-in-use). After
+  // linking, ensureProfile refreshes the stored provider list.
+  const linkGoogle = async () => {
+    if (!auth.currentUser) throw new Error("Sign in first.");
+    await linkWithPopup(auth.currentUser, googleProvider);
+    try {
+      await api.ensureProfile();
+    } catch (e) {
+      /* provider refresh best-effort */
+    }
+    await refreshProfile();
+  };
+
   const logout = () => signOut(auth);
 
+  // Whether each login method is linked to this account.
+  const googleLinked = !!(profile && (profile.authProviders || []).includes("google"));
+  const xLinked = !!(profile && profile.xHandle);
+
   // Account is "active" (can enter the airdrop) once it has a reward wallet AND
-  // an X account linked. This raises the bar for bot/fake accounts.
-  const isActive = !!(profile && profile.walletAddress && profile.xHandle);
+  // BOTH logins linked (Google + X) — one person, one X, one Google.
+  const isActive = !!(profile && profile.walletAddress && xLinked && googleLinked);
 
   const value = {
     user,
     profile,
     isAdmin,
     config,
-    loading,
+    loading: loading || xTokenPending,
     firebaseConfigured,
     isActive,
+    googleLinked,
+    xLinked,
     refreshProfile,
     setProfile,
     signInGoogle,
     signInX,
+    linkGoogle,
     logout,
   };
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { SocialCard } from "../components/Account";
+import { AccountLinks } from "../components/Account";
 import { WalletManager, WalletOnboard } from "../components/InAppWallet";
 import { useWallet } from "../context/WalletContext";
 
@@ -15,7 +15,7 @@ export default function Settings() {
       </div>
       <div className="stack">
         {unlocked ? <WalletManager /> : <WalletOnboard onReady={refreshProfile} />}
-        <SocialCard profile={profile} onSaved={refreshProfile} />
+        <AccountLinks profile={profile} onSaved={refreshProfile} />
         <div className="panel">
           <h3 className="card-title">Account</h3>
           <p className="kv">{profile?.email || "—"}</p>
