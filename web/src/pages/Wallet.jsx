@@ -5,8 +5,8 @@ import { WalletOnboard, WalletManager } from "../components/InAppWallet";
 import { api, errMessage } from "../lib/functions";
 import { ethers, explorerTxUrl } from "../lib/localWallet";
 import { TX_TARGET_ADDRESS } from "../lib/chain";
-import { SWAP_CONFIG, swapEnabled } from "../lib/swapConfig";
-import { getQuote, executeSwap } from "../lib/swap";
+import { SWAP_CONFIG, swapEnabled, NATIVE_PEX } from "../lib/swapConfig";
+import { loadTokenUniverse, loadPools, quote as swapQuote, executeSwap } from "../lib/swap";
 import Icon from "../components/Icon";
 
 // The wallet hub: unlock/create, manage, faucet, swap, send — all in-app.
@@ -92,61 +92,91 @@ function FaucetCard() {
   );
 }
 
-// --- Swap: in-page, signed by the in-browser wallet -------------------------
+// --- Swap: in-page, SDK-backed, signed by the in-browser wallet -------------
 function SwapCard() {
   const { signer, refreshBalance } = useWallet();
-  const tokens = SWAP_CONFIG.tokens;
-  const [inIdx, setInIdx] = useState(0);
-  const [outIdx, setOutIdx] = useState(1);
+  const fixed = SWAP_CONFIG.fixedPool;
+  const [pools, setPools] = useState(null);
+  const [tokens, setTokens] = useState(fixed ? [fixed.tokenIn, fixed.tokenOut] : [NATIVE_PEX]);
+  const [loadErr, setLoadErr] = useState("");
+  const [inKey, setInKey] = useState(fixed ? tokenKey(fixed.tokenIn) : "native");
+  const [outKey, setOutKey] = useState(fixed ? tokenKey(fixed.tokenOut) : "");
   const [amount, setAmount] = useState("");
-  const [quote, setQuote] = useState(null);
+  const [q, setQ] = useState(null);
   const [step, setStep] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
-  const tokenIn = tokens[inIdx];
-  const tokenOut = tokens[outIdx];
-  const canQuote = swapEnabled() && tokenIn && tokenOut && inIdx !== outIdx && Number(amount) > 0;
+  const tokenIn = tokens.find((t) => tokenKey(t) === inKey);
+  const tokenOut = tokens.find((t) => tokenKey(t) === outKey);
 
+  // Load pools (+ token universe in any-pool mode) once.
   useEffect(() => {
-    if (!canQuote) {
-      setQuote(null);
+    if (!swapEnabled()) return;
+    let alive = true;
+    (async () => {
+      try {
+        if (fixed) {
+          const p = await loadPools();
+          if (alive) setPools(p);
+        } else {
+          const { pools: p, tokens: ts } = await loadTokenUniverse();
+          if (alive) {
+            setPools(p);
+            setTokens(ts);
+            if (!outKey) {
+              const firstOther = ts.find((t) => tokenKey(t) !== "native");
+              if (firstOther) setOutKey(tokenKey(firstOther));
+            }
+          }
+        }
+      } catch (e) {
+        if (alive) setLoadErr(e?.message || "Could not load pools.");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced quote.
+  useEffect(() => {
+    if (!pools || !tokenIn || !tokenOut || inKey === outKey || !(Number(amount) > 0)) {
+      setQ(null);
       return;
     }
     let alive = true;
-    const t = setTimeout(async () => {
+    const t = setTimeout(() => {
       try {
-        const q = await getQuote(tokenIn, tokenOut, amount);
-        if (alive) setQuote(q);
+        const res = swapQuote(pools, tokenIn, tokenOut, amount);
+        if (alive) setQ(res);
       } catch (e) {
-        if (alive) setQuote(null);
+        if (alive) setQ(null);
       }
-    }, 400);
+    }, 350);
     return () => {
       alive = false;
       clearTimeout(t);
     };
-  }, [amount, inIdx, outIdx, canQuote, tokenIn, tokenOut]);
+  }, [pools, inKey, outKey, amount, tokenIn, tokenOut]);
 
   if (!swapEnabled()) {
     return (
       <div className="panel">
         <h3 className="card-title"><Icon name="swap" /> Swap</h3>
-        <p className="task-desc">
-          In-app swap is being connected to the PexSwap router. It will appear here — no redirect to any DEX.
-        </p>
+        <p className="task-desc">In-app swap is being connected to the PexSwap DEX.</p>
       </div>
     );
   }
 
   function flip() {
-    setInIdx(outIdx);
-    setOutIdx(inIdx);
-    setQuote(null);
+    setInKey(outKey);
+    setOutKey(inKey);
+    setQ(null);
   }
 
   async function doSwap() {
-    if (!signer || !quote) return;
+    if (!signer || !q?.pool) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -154,41 +184,51 @@ function SwapCard() {
         tokenIn,
         tokenOut,
         amountInHuman: amount,
-        minOutRaw: quote.minOutRaw,
+        minOutRaw: q.minOutRaw,
+        pool: q.pool,
         onStep: setStep,
       });
       setMsg({ ok: true, hash: receipt.hash, text: "Swap complete" });
       setAmount("");
-      setQuote(null);
+      setQ(null);
       setTimeout(() => refreshBalance(), 1500);
     } catch (e) {
-      setMsg({ ok: false, text: e?.reason || e?.message || "Swap failed." });
+      setMsg({ ok: false, text: e?.shortMessage || e?.reason || e?.message || "Swap failed." });
     } finally {
       setBusy(false);
       setStep("");
     }
   }
 
+  const noPool = !!pools && !!tokenIn && !!tokenOut && inKey !== outKey && Number(amount) > 0 && !q;
+  const TokenSelect = ({ value, onChange, disabled }) => (
+    <select className="task-input wl-select" value={value} disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}>
+      {tokens.map((t) => <option key={tokenKey(t)} value={tokenKey(t)}>{t.symbol}</option>)}
+    </select>
+  );
+
   return (
     <div className="panel">
       <h3 className="card-title"><Icon name="swap" /> Swap</h3>
+      {!pools && !loadErr && <p className="subtle">Loading pools…</p>}
+      {loadErr && <p className="msg err">{loadErr}</p>}
       <div className="swap-row">
         <input className="task-input" type="number" min="0" placeholder="0.0" value={amount}
           onChange={(e) => setAmount(e.target.value)} />
-        <select className="task-input wl-select" value={inIdx} onChange={(e) => setInIdx(Number(e.target.value))}>
-          {tokens.map((t, i) => <option key={t.symbol} value={i}>{t.symbol}</option>)}
-        </select>
+        <TokenSelect value={inKey} onChange={setInKey} disabled={!!fixed} />
       </div>
-      <div className="swap-flip"><button className="btn btn-sm btn-ghost" onClick={flip}>↓ swap</button></div>
+      <div className="swap-flip">
+        <button className="btn btn-sm btn-ghost" onClick={flip} disabled={!!fixed}>↓ swap</button>
+      </div>
       <div className="swap-row">
         <input className="task-input" readOnly placeholder="0.0"
-          value={quote ? Number(quote.amountOut).toFixed(6) : ""} />
-        <select className="task-input wl-select" value={outIdx} onChange={(e) => setOutIdx(Number(e.target.value))}>
-          {tokens.map((t, i) => <option key={t.symbol} value={i}>{t.symbol}</option>)}
-        </select>
+          value={q ? Number(q.amountOut).toFixed(6) : ""} />
+        <TokenSelect value={outKey} onChange={setOutKey} disabled={!!fixed} />
       </div>
-      {inIdx === outIdx && <p className="subtle">Pick two different tokens.</p>}
-      <button className="btn btn-primary mt" onClick={doSwap} disabled={busy || !quote || inIdx === outIdx}>
+      {inKey === outKey && <p className="subtle">Pick two different tokens.</p>}
+      {noPool && <p className="subtle">No pool for this pair yet.</p>}
+      <button className="btn btn-primary mt" onClick={doSwap} disabled={busy || !q?.pool || inKey === outKey}>
         {busy ? (step || "Working…") : "Swap"}
       </button>
       {msg && (
@@ -198,6 +238,14 @@ function SwapCard() {
       )}
     </div>
   );
+}
+
+function tokenKey(t) {
+  if (!t) return "";
+  if (t.key) return t.key;
+  if (t.lane === "rust") return "rust:" + t.id;
+  if (t.native || t.address === "0x0000000000000000000000000000000000000000") return "native";
+  return "sol:" + String(t.address).toLowerCase();
 }
 
 // --- Transaction task: one-click send to the Pexli (faucet) address ---------

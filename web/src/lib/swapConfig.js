@@ -1,52 +1,47 @@
-// PexSwap router configuration.
+// PexSwap (Lifelox DEX) configuration for the in-app swap widget.
 //
-// Fill these in with the real values from the PexSwap repo/team (spec §3) to
-// turn the in-app swap ON. Until routerAddress is set, the Swap card shows a
-// "coming soon" state and never sends a transaction.
+// The deployed DEX on Pexli is the CROSS-LANE ("dual") router+factory — it
+// handles Solidity, Rust and native PEX sides uniformly (native PEX is pooled
+// as PEX itself, no WPEX wrapper). Addresses are the ones the PexSwap frontend
+// ships (frontend/src/config/addresses.ts).
 //
-// The default ABI below is the common Uniswap-V2 shape. If PexSwap's router
-// uses different function names/signatures, replace ROUTER_ABI to match — the
-// swap client (lib/swap.js) only relies on the names present here.
+// Pool discovery, reserves and the quote FORMULA come from the vendored
+// @lifelox/dex-sdk (src/vendor/dex-sdk) — we never re-implement the AMM math.
+// Only the dual router's swapExactInput calldata is built here, because the SDK
+// only ships the core-V2 builder and this deployment runs the dual router.
+
+export const PEXLI_CHAIN_ID = 78901;
+
+// Native PEX is the zero address (a pool "side" and the router's native lane).
+export const NATIVE_PEX = {
+  key: "native",
+  symbol: "PEX",
+  name: "Pexli",
+  decimals: 18,
+  lane: "solidity", // pool-side lane; the Asset lane is "native" (see swap.js)
+  address: "0x0000000000000000000000000000000000000000",
+  native: true,
+};
 
 export const SWAP_CONFIG = {
-  // PexSwap router contract address on Pexli.
-  routerAddress: "0x596b93967Cc18539795437A17E689e775c2CCE93",
-
-  // Wrapped-native (WPEX) address — needed for PEX <-> token swaps. FILL THIS
-  // with the router's WETH()/WPEX() address to enable native swaps.
-  wpexAddress: "",
-
-  // Tokens shown in the picker. `address: "native"` is the native PEX coin.
-  // ADD the tradable ERC-20 tokens here (address / symbol / decimals) to turn
-  // swapping on — at least one ERC-20 alongside PEX.
-  tokens: [
-    { address: "native", symbol: "PEX", name: "Pexli", decimals: 18 },
-    // { address: "0x...", symbol: "USDX", name: "USDX", decimals: 6 },
-  ],
+  // Cross-lane (dual) contracts — deployed on the Pexli testnet.
+  dualFactory: "0x60a0d287C0d2584b8e585317d1264bF389cB894E",
+  dualRouter: "0x596b93967Cc18539795437A17E689e775c2CCE93",
 
   // Default slippage tolerance (fraction). 0.005 = 0.5%.
   slippage: 0.005,
+
+  // Extra tokens to show even before any pool is discovered (optional). Native
+  // PEX is always included. Each: { symbol, name, decimals, lane, address?, id? }.
+  tokens: [],
+
+  // FIXED-POOL mode (optional). When set, the widget offers exactly this one
+  // pair and skips discovery. tokenIn/tokenOut are token objects like NATIVE_PEX
+  // (with symbol/name/decimals/lane/address|id). Leave null for "any pool" mode.
+  //   fixedPool: { tokenIn: NATIVE_PEX, tokenOut: { symbol:"USDP", address:"0x…", decimals:18, lane:"solidity" } }
+  fixedPool: null,
 };
 
-// Uniswap-V2-style router ABI (quote + the swap variants). Adjust to PexSwap.
-export const ROUTER_ABI = [
-  "function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)",
-  "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)",
-  "function swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable returns (uint256[] amounts)",
-  "function swapExactTokensForETH(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)",
-];
-
-export const ERC20_ABI = [
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function approve(address spender, uint256 amount) returns (bool)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "function decimals() view returns (uint8)",
-  "function symbol() view returns (string)",
-];
-
-// Swap is live only once we have a router AND at least two swappable tokens
-// (so PEX + one ERC-20, or two ERC-20s). Until the token list / WPEX are filled
-// the Swap card shows a friendly "coming soon" state instead of a broken picker.
 export function swapEnabled() {
-  return !!SWAP_CONFIG.routerAddress && SWAP_CONFIG.tokens.length >= 2;
+  return !!SWAP_CONFIG.dualRouter && !!SWAP_CONFIG.dualFactory;
 }
