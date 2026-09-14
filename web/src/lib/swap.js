@@ -146,6 +146,24 @@ export function quote(pools, tokenIn, tokenOut, amountInHuman) {
   };
 }
 
+// Send a tx, retrying once on a transient RPC hiccup. The Pexli RPC sometimes
+// fails the FIRST eth_estimateGas of a session with "missing revert data" (an
+// empty-revert artifact, not a real revert — the same call succeeds moments
+// later). We pass an explicit gasLimit so ethers skips estimateGas entirely,
+// and still retry once for any other cold-start blip.
+async function sendTx(signer, req, gasLimit) {
+  const full = { ...req, gasLimit };
+  try {
+    return await signer.sendTransaction(full);
+  } catch (e) {
+    const m = String(e?.shortMessage || e?.message || "");
+    // Don't retry a clear user rejection or an insufficient-funds error.
+    if (/rejected|denied|insufficient funds/i.test(m)) throw e;
+    await new Promise((r) => setTimeout(r, 900));
+    return signer.sendTransaction(full);
+  }
+}
+
 // Execute the swap with the in-app signer. `pool` is the PoolInfo from quote().
 export async function executeSwap(signer, { tokenIn, tokenOut, amountInHuman, minOutRaw, pool, onStep }) {
   const to = await signer.getAddress();
@@ -159,7 +177,7 @@ export async function executeSwap(signer, { tokenIn, tokenOut, amountInHuman, mi
     if (!pool?.pair) throw new Error("No pool for this pair yet.");
     onStep?.(`Sending ${tokenIn.symbol} to the pool…`);
     const rt = buildRustTransferTx(BigInt(tokenIn.id), pool.pair, amountIn);
-    const push = await signer.sendTransaction({ to: rt.to, data: rt.data, value: BigInt(rt.value ?? 0) });
+    const push = await sendTx(signer, { to: rt.to, data: rt.data, value: BigInt(rt.value ?? 0) }, 250000n);
     await push.wait(1);
   } else if (!isNativeTok(tokenIn)) {
     // Solidity input: approve the router if the allowance is short.
@@ -167,7 +185,10 @@ export async function executeSwap(signer, { tokenIn, tokenOut, amountInHuman, mi
     const current = await erc.allowance(to, router);
     if (current < amountIn) {
       onStep?.("Approving…");
-      const ap = await erc.approve(router, ethers.MaxUint256);
+      const ap = await sendTx(signer, {
+        to: tokenIn.address,
+        data: erc.interface.encodeFunctionData("approve", [router, ethers.MaxUint256]),
+      }, 120000n);
       await ap.wait(1);
     }
   }
@@ -178,11 +199,11 @@ export async function executeSwap(signer, { tokenIn, tokenOut, amountInHuman, mi
     functionName: "swapExactInput",
     args: [assetArg(tokenIn), assetArg(tokenOut), amountIn, minOutRaw, to, deadline],
   });
-  const tx = await signer.sendTransaction({
+  const tx = await sendTx(signer, {
     to: router,
     data,
     value: isNativeTok(tokenIn) ? amountIn : 0n,
-  });
+  }, 700000n);
   const receipt = await tx.wait(1);
   if (!receipt || receipt.status !== 1) throw new Error("Swap transaction failed.");
   return receipt;
