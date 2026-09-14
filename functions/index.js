@@ -96,6 +96,7 @@ exports.exportUsersCsv = admin.exportUsersCsv;
 exports.grantAdmin = admin.grantAdmin;
 exports.bootstrapAdmin = admin.bootstrapAdmin;
 exports.adjustPoints = admin.adjustPoints;
+exports.adminStats = admin.adminStats;
 
 // Leaderboard
 exports.getLeaderboard = leaderboard.getLeaderboard;

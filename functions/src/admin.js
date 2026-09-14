@@ -239,6 +239,217 @@ const adjustPoints = onCall(CALL_OPTS, async (request) => {
   return { ok: true, uid, points: newTotal };
 });
 
+// --- Analytics dashboard ----------------------------------------------------
+// One call returns everything the admin dashboard charts need. All time-series
+// come from the pointsLedger event log (every earn writes {uid,taskType,points,
+// createdAt}); user-shape metrics come from a single users scan; all-time
+// per-task totals use cheap count() aggregations (single-field taskType filter,
+// so no composite index is ever required).
+const STAT_TASKS = [
+  "swap",
+  "tx",
+  "faucet",
+  "tweet",
+  "follow_x",
+  "follow_ig",
+  "medium",
+  "youtube",
+  "tiktok",
+  "instagram",
+  "review",
+  "referral",
+];
+
+const dayKey = (ms) => new Date(ms).toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+const monthKey = (ms) => new Date(ms).toISOString().slice(0, 7); // YYYY-MM (UTC)
+
+const adminStats = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const days = Math.min(180, Math.max(7, Math.trunc(Number(request.data?.days) || 30)));
+
+  const now = Date.now();
+  const rangeCutoff = now - days * 86400000;
+  // Always scan back at least to the start of the current calendar month so the
+  // "this month" headline numbers are exact even on a short (7-day) range.
+  const d = new Date(now);
+  const monthStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+  const scanCutoff = Math.min(rangeCutoff, monthStart);
+  const curMonth = monthKey(now);
+
+  // --- 1. Users scan (one pass → many metrics) ------------------------------
+  const usersSnap = await db.collection("users").limit(50000).get();
+  const users = {
+    total: usersSnap.size,
+    activated: 0, // has a wallet
+    google: 0,
+    twitter: 0,
+    withXHandle: 0,
+    withIgHandle: 0,
+    totalPoints: 0,
+    referralPoints: 0,
+  };
+  const signupsByDay = {};
+  for (const doc of usersSnap.docs) {
+    const u = doc.data();
+    users.totalPoints += u.points || 0;
+    users.referralPoints += u.referralPointsEarned || 0;
+    if (u.walletAddress) users.activated += 1;
+    const provs = u.authProviders || [];
+    if (provs.includes("google")) users.google += 1;
+    if (provs.includes("twitter") || u.xHandle) users.twitter += 1;
+    if (u.xHandle) users.withXHandle += 1;
+    if (u.igHandle) users.withIgHandle += 1;
+    const created = tsToMs(u.createdAt);
+    if (created && created >= scanCutoff) {
+      const k = dayKey(created);
+      signupsByDay[k] = (signupsByDay[k] || 0) + 1;
+    }
+  }
+
+  // --- 2. Ledger window scan (time-series) ----------------------------------
+  let ledgerDocs = [];
+  try {
+    const snap = await db
+      .collection("pointsLedger")
+      .where("createdAt", ">=", Timestamp.fromMillis(scanCutoff))
+      .orderBy("createdAt", "desc")
+      .limit(30000)
+      .get();
+    ledgerDocs = snap.docs;
+  } catch (e) {
+    // If the range index isn't ready, fall back to a plain recent scan.
+    const snap = await db.collection("pointsLedger").limit(30000).get();
+    ledgerDocs = snap.docs;
+  }
+
+  // Per-day buckets keyed by date, plus per-month social/content buckets and a
+  // per-task breakdown within the scanned window.
+  const dayBuckets = {}; // date -> { active:Set, points, swap, tx, faucet, tweet, follow, content }
+  const monthBuckets = {}; // month -> { follow_x, follow_ig, medium, youtube, tiktok, instagram, review, swap, tx }
+  const taskWindow = {}; // taskType -> { count, points }
+  const thisMonth = {};
+  for (const t of STAT_TASKS) thisMonth[t] = 0;
+
+  const bumpMonth = (mk, field) => {
+    const m = (monthBuckets[mk] = monthBuckets[mk] || {});
+    m[field] = (m[field] || 0) + 1;
+  };
+
+  for (const doc of ledgerDocs) {
+    const r = doc.data();
+    const ms = tsToMs(r.createdAt);
+    if (!ms) continue;
+    const type = r.taskType || "other";
+    const pts = r.points || 0;
+
+    const tw = (taskWindow[type] = taskWindow[type] || { count: 0, points: 0 });
+    tw.count += 1;
+    tw.points += pts;
+
+    const mk = monthKey(ms);
+    if (STAT_TASKS.includes(type)) bumpMonth(mk, type);
+    if (mk === curMonth && type in thisMonth) thisMonth[type] += 1;
+
+    // Daily buckets only within the requested display range.
+    if (ms >= rangeCutoff) {
+      const k = dayKey(ms);
+      const b = (dayBuckets[k] = dayBuckets[k] || {
+        active: new Set(),
+        points: 0,
+        swap: 0,
+        tx: 0,
+        faucet: 0,
+        tweet: 0,
+        follow: 0,
+        content: 0,
+      });
+      if (r.uid) b.active.add(r.uid);
+      b.points += pts;
+      if (type === "swap") b.swap += 1;
+      else if (type === "tx") b.tx += 1;
+      else if (type === "faucet") b.faucet += 1;
+      else if (type === "tweet") b.tweet += 1;
+      else if (type === "follow_x" || type === "follow_ig") b.follow += 1;
+      else if (["medium", "youtube", "tiktok", "instagram", "review"].includes(type)) b.content += 1;
+    }
+  }
+
+  // Contiguous daily array (fill zero days) for the display range.
+  const daily = [];
+  for (let t = now - (days - 1) * 86400000; t <= now; t += 86400000) {
+    const k = dayKey(t);
+    const b = dayBuckets[k];
+    daily.push({
+      date: k,
+      activeUsers: b ? b.active.size : 0,
+      points: b ? b.points : 0,
+      swaps: b ? b.swap : 0,
+      txs: b ? b.tx : 0,
+      faucets: b ? b.faucet : 0,
+      tweets: b ? b.tweet : 0,
+      follows: b ? b.follow : 0,
+      content: b ? b.content : 0,
+      signups: signupsByDay[k] || 0,
+    });
+  }
+
+  // Monthly array (last 6 months, oldest→newest) for the social/content view.
+  const monthly = [];
+  for (let i = 5; i >= 0; i--) {
+    const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 1));
+    const mk = monthKey(dt.getTime());
+    const m = monthBuckets[mk] || {};
+    monthly.push({
+      month: mk,
+      follow_x: m.follow_x || 0,
+      follow_ig: m.follow_ig || 0,
+      medium: m.medium || 0,
+      youtube: m.youtube || 0,
+      tiktok: m.tiktok || 0,
+      instagram: m.instagram || 0,
+      review: m.review || 0,
+      swap: m.swap || 0,
+      tx: m.tx || 0,
+    });
+  }
+
+  // --- 3. All-time totals via count() aggregation (exact, index-free) -------
+  const allTime = {};
+  await Promise.all(
+    STAT_TASKS.map(async (t) => {
+      try {
+        const agg = await db.collection("pointsLedger").where("taskType", "==", t).count().get();
+        allTime[t] = agg.data().count;
+      } catch (e) {
+        allTime[t] = (taskWindow[t] && taskWindow[t].count) || 0; // fallback: window count
+      }
+    }),
+  );
+  let ledgerTotal = 0;
+  try {
+    ledgerTotal = (await db.collection("pointsLedger").count().get()).data().count;
+  } catch (e) {
+    ledgerTotal = ledgerDocs.length;
+  }
+
+  // Task breakdown table (windowed).
+  const taskBreakdown = Object.entries(taskWindow)
+    .map(([taskType, v]) => ({ taskType, count: v.count, points: v.points }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    generatedAt: now,
+    days,
+    users,
+    allTime, // per-task lifetime counts + we also expose derived headline below
+    thisMonth, // current calendar month per-task counts
+    ledgerTotal,
+    daily,
+    monthly,
+    taskBreakdown,
+  };
+});
+
 // --- Admin bootstrap --------------------------------------------------------
 // Grant the admin claim to another user (requires an existing admin).
 const grantAdmin = onCall(CALL_OPTS, async (request) => {
@@ -309,4 +520,5 @@ module.exports = {
   grantAdmin,
   bootstrapAdmin,
   adjustPoints,
+  adminStats,
 };

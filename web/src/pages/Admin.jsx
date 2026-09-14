@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api, errMessage } from "../lib/functions";
+import { StatCard, Bars, AreaLine, Donut } from "../components/StatCharts";
 
-const TABS = ["Tasks & Points", "Tweet Pool", "Moderation", "Users", "Admins"];
+const TABS = ["Dashboard", "Tasks & Points", "Tweet Pool", "Moderation", "Users", "Admins"];
 
 export default function Admin() {
   const [tab, setTab] = useState(TABS[0]);
@@ -18,6 +19,7 @@ export default function Admin() {
           </button>
         ))}
       </div>
+      {tab === "Dashboard" && <DashboardTab />}
       {tab === "Tasks & Points" && <ConfigTab />}
       {tab === "Tweet Pool" && <TweetPoolTab />}
       {tab === "Moderation" && <ModerationTab />}
@@ -30,6 +32,217 @@ export default function Admin() {
 function Msg({ msg }) {
   if (!msg) return null;
   return <p className={`msg ${msg.ok ? "ok" : "err"}`}>{msg.text}</p>;
+}
+
+// --- Analytics dashboard ----------------------------------------------------
+const RANGES = [
+  { label: "7 days", days: 7 },
+  { label: "30 days", days: 30 },
+  { label: "90 days", days: 90 },
+];
+
+// Chart colours pulled from the theme so light/dark both look right.
+const C = {
+  orange: "var(--accent)",
+  deep: "var(--accent-2)",
+  green: "var(--green)",
+  cyan: "var(--cyan)",
+  red: "var(--red)",
+};
+
+function Panel({ title, sub, children, span }) {
+  return (
+    <div className="dash-panel" style={span ? { gridColumn: "1 / -1" } : undefined}>
+      <div className="dash-panel-head">
+        <h3 className="dash-panel-title">{title}</h3>
+        {sub && <span className="subtle">{sub}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function DashboardTab() {
+  const [days, setDays] = useState(30);
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(true);
+  const [msg, setMsg] = useState(null);
+
+  async function load(d = days) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api.adminStats({ days: d });
+      setData(res.data);
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  useEffect(() => {
+    load(days);
+  }, [days]); // eslint-disable-line
+
+  if (busy && !data)
+    return (
+      <div className="center" style={{ padding: 40 }}>
+        <div className="spin" />
+      </div>
+    );
+  if (!data) return <Msg msg={msg} />;
+
+  const u = data.users || {};
+  const at = data.allTime || {};
+  const tm = data.thisMonth || {};
+  const activeToday = data.daily?.length ? data.daily[data.daily.length - 1].activeUsers : 0;
+  const activePct = u.total ? Math.round((u.activated / u.total) * 100) : 0;
+  const totalTx = (at.swap || 0) + (at.tx || 0) + (at.faucet || 0); // on-chain actions
+
+  return (
+    <div className="dash">
+      <div className="row spread dash-toolbar">
+        <div className="range-pills">
+          {RANGES.map((r) => (
+            <button
+              key={r.days}
+              className={`pill ${days === r.days ? "active" : ""}`}
+              onClick={() => setDays(r.days)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <button className="btn btn-sm" onClick={() => load()} disabled={busy}>
+          {busy ? "Refreshing…" : "↻ Refresh"}
+        </button>
+      </div>
+      <Msg msg={msg} />
+
+      {/* Headline KPIs */}
+      <div className="kpi-grid">
+        <StatCard label="Total users" value={u.total} sub={`${u.activated} activated · ${activePct}%`} accent={C.orange} icon="👥" />
+        <StatCard label="Active today" value={activeToday} sub="earned points today" accent={C.cyan} icon="⚡" />
+        <StatCard label="Total points minted" value={u.totalPoints} sub={`${u.referralPoints || 0} from referrals`} accent={C.green} icon="◆" />
+        <StatCard label="Total swaps" value={at.swap || 0} sub={`${tm.swap || 0} this month`} accent={C.orange} icon="⇄" />
+        <StatCard label="Total transactions" value={totalTx} sub={`swaps + sends + faucet`} accent={C.deep} icon="↗" />
+        <StatCard label="Faucet claims" value={at.faucet || 0} sub={`${tm.faucet || 0} this month`} accent={C.cyan} icon="🚰" />
+      </div>
+
+      {/* Time-series */}
+      <div className="dash-grid">
+        <Panel title="Daily active users" sub={`last ${days} days`}>
+          <AreaLine data={data.daily} field="activeUsers" color={C.cyan} />
+        </Panel>
+        <Panel title="Points minted / day" sub={`last ${days} days`}>
+          <Bars data={data.daily.map((d) => ({ ...d, value: d.points }))} color={C.green} />
+        </Panel>
+        <Panel title="Swaps / day" sub={`last ${days} days`}>
+          <Bars data={data.daily.map((d) => ({ ...d, value: d.swaps }))} color={C.orange} />
+        </Panel>
+        <Panel title="Transactions (send PEX) / day" sub={`last ${days} days`}>
+          <Bars data={data.daily.map((d) => ({ ...d, value: d.txs }))} color={C.deep} />
+        </Panel>
+        <Panel title="New sign-ups / day" sub={`last ${days} days`}>
+          <Bars data={data.daily.map((d) => ({ ...d, value: d.signups }))} color={C.cyan} />
+        </Panel>
+        <Panel title="Faucet claims / day" sub={`last ${days} days`}>
+          <Bars data={data.daily.map((d) => ({ ...d, value: d.faucets }))} color={C.green} />
+        </Panel>
+      </div>
+
+      {/* Monthly social / content */}
+      <Panel title="Social & content — monthly" sub="X follows · Instagram · Medium articles (last 6 months)" span>
+        <div className="month-cards">
+          <StatCard label="X follows · this month" value={tm.follow_x || 0} sub={`${at.follow_x || 0} all-time`} accent={C.orange} icon="𝕏" />
+          <StatCard label="Instagram · this month" value={tm.follow_ig || 0} sub={`${at.follow_ig || 0} all-time`} accent={C.red} icon="◎" />
+          <StatCard label="Medium articles · this month" value={tm.medium || 0} sub={`${at.medium || 0} all-time`} accent={C.green} icon="✎" />
+        </div>
+        <Bars
+          data={data.monthly}
+          kind="month"
+          height={170}
+          series={[
+            { key: "follow_x", label: "X follows", color: C.orange },
+            { key: "follow_ig", label: "Instagram", color: C.red },
+            { key: "medium", label: "Medium", color: C.green },
+          ]}
+        />
+      </Panel>
+
+      {/* Content breakdown + providers */}
+      <div className="dash-grid two">
+        <Panel title="Content submissions — this month" sub="approved / credited posts">
+          <div className="mini-stats">
+            <MiniStat label="Medium" v={tm.medium} allt={at.medium} c={C.green} />
+            <MiniStat label="YouTube" v={tm.youtube} allt={at.youtube} c={C.red} />
+            <MiniStat label="TikTok" v={tm.tiktok} allt={at.tiktok} c={C.cyan} />
+            <MiniStat label="Instagram post" v={tm.instagram} allt={at.instagram} c={C.orange} />
+            <MiniStat label="Review" v={tm.review} allt={at.review} c={C.deep} />
+            <MiniStat label="Tweets" v={tm.tweet} allt={at.tweet} c={C.orange} />
+          </div>
+        </Panel>
+        <Panel title="Sign-in providers" sub="how activated users log in">
+          <Donut
+            parts={[
+              { label: "Google", value: u.google || 0, color: C.cyan },
+              { label: "X (Twitter)", value: u.twitter || 0, color: C.orange },
+            ]}
+          />
+          <div className="prov-rows">
+            <div className="row spread"><span className="subtle">X handle linked</span><b>{u.withXHandle || 0}</b></div>
+            <div className="row spread"><span className="subtle">Instagram linked</span><b>{u.withIgHandle || 0}</b></div>
+          </div>
+        </Panel>
+      </div>
+
+      {/* Task breakdown table */}
+      <Panel title="Points ledger — task breakdown" sub={`within last ${days} days · ${data.ledgerTotal || 0} lifetime rows`} span>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Actions ({days}d)</th>
+                <th>Points ({days}d)</th>
+                <th>All-time actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.taskBreakdown || []).map((t) => (
+                <tr key={t.taskType}>
+                  <td><span className="badge on" style={{ textTransform: "none" }}>{t.taskType}</span></td>
+                  <td><b>{t.count}</b></td>
+                  <td>{t.points.toLocaleString()}</td>
+                  <td className="subtle">{at[t.taskType] ?? "—"}</td>
+                </tr>
+              ))}
+              {(!data.taskBreakdown || !data.taskBreakdown.length) && (
+                <tr><td colSpan={4} className="subtle">No activity in this range yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <p className="subtle dash-foot">
+        Snapshot generated {new Date(data.generatedAt).toLocaleString()}. Time-series come from the
+        points ledger; all-time totals are exact counts.
+      </p>
+    </div>
+  );
+}
+
+function MiniStat({ label, v, allt, c }) {
+  return (
+    <div className="mini-stat">
+      <span className="mini-dot" style={{ background: c }} />
+      <div className="mini-body">
+        <span className="mini-label">{label}</span>
+        <span className="mini-val">{v || 0}<em> / {allt || 0} all-time</em></span>
+      </div>
+    </div>
+  );
 }
 
 // --- Tasks, points, locks, approvals ---
