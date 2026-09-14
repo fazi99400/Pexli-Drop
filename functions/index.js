@@ -39,7 +39,6 @@ setGlobalOptions({
 require("./src/init");
 
 const profile = require("./src/profile");
-const onchain = require("./src/tasks/onchain");
 const links = require("./src/tasks/links");
 const x = require("./src/tasks/x");
 const social = require("./src/social");
@@ -53,10 +52,10 @@ exports.getMe = profile.getMe;
 exports.setWallet = profile.setWallet;
 exports.setReferrer = profile.setReferrer;
 
-// On-chain tasks
-exports.verifyFaucet = onchain.verifyFaucet;
-exports.verifySwap = onchain.verifySwap;
-exports.verifyTx = onchain.verifyTx;
+// On-chain tasks are now handled in-app: the faucet dispenses (claimFaucet),
+// and swaps / "send PEX" are verified from the tx hash over RPC (verifyTxHash).
+// The old explorer-based verifyFaucet/verifySwap/verifyTx are retired — their
+// Cloud Run services are deleted in the deploy workflow to free CPU quota.
 
 // In-app faucet dispenser (sends PEX from the faucet key to the user's wallet).
 const faucet = require("./src/tasks/faucet");
