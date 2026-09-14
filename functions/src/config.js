@@ -56,6 +56,11 @@ const DEFAULT_CONFIG = {
   faucet: {
     amountPex: "0.05",
   },
+  // "Send PEX to Pexli" task: fixed amount sent to TX_TARGET_ADDRESS (the
+  // faucet address) with one click. Cooldown locks.txHrs; points points.tx.
+  tx: {
+    amountPex: "0.0004",
+  },
   // Follow tasks: when true, submitting a follow is auto-credited (no admin
   // approval). X submissions still require the handle to be a real, existing
   // public account (checked via a free endpoint). Set false to review manually.
@@ -89,6 +94,7 @@ async function getConfig() {
     },
     referral: { ...DEFAULT_CONFIG.referral, ...(data.referral || {}) },
     faucet: { ...DEFAULT_CONFIG.faucet, ...(data.faucet || {}) },
+    tx: { ...DEFAULT_CONFIG.tx, ...(data.tx || {}) },
     autoApproveFollows:
       data.autoApproveFollows === undefined
         ? DEFAULT_CONFIG.autoApproveFollows

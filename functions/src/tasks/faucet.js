@@ -72,8 +72,11 @@ const claimFaucet = onCall({ ...CALL_OPTS }, async (request) => {
     return { walletAddress: u.walletAddress, prevFaucetAt: u.lastFaucetAt || null };
   });
 
-  // 2) Send the PEX. On any failure, release the reserved slot so they can retry.
-  let receipt;
+  // 2) Broadcast the PEX transfer. IMPORTANT: only a failure to BROADCAST is a
+  // real failure (release the slot + error). Once the tx is broadcast the PEX
+  // is on its way, so a slow/failed *confirmation* must NOT show an error or
+  // release the slot — that produced the "received PEX but got an error" bug.
+  let txHash;
   try {
     const signer = faucetSigner();
     const to = chain.normalizeAddress(walletAddress);
@@ -84,15 +87,18 @@ const claimFaucet = onCall({ ...CALL_OPTS }, async (request) => {
       throw new HttpsError("resource-exhausted", "The faucet is temporarily out of PEX. Try again later.");
     }
     const txResp = await signer.sendTransaction({ to, value });
-    receipt = await txResp.wait(1);
-    if (!receipt || receipt.status !== 1) {
-      throw new HttpsError("internal", "Faucet transaction failed on-chain.");
-    }
+    txHash = txResp.hash;
+
+    // Best-effort confirmation with a short timeout — never fatal.
+    await Promise.race([
+      txResp.wait(1).catch(() => null),
+      new Promise((r) => setTimeout(r, 12000)),
+    ]);
   } catch (e) {
-    // release the slot
+    // Only reached if the tx never broadcast.
     await userRef.set({ lastFaucetAt: prevFaucetAt }, { merge: true }).catch(() => {});
     if (e instanceof HttpsError) throw e;
-    console.error("claimFaucet send error", e);
+    console.error("claimFaucet broadcast error", e);
     throw new HttpsError("unavailable", "Could not send PEX right now. Please try again.");
   }
 
@@ -101,9 +107,9 @@ const claimFaucet = onCall({ ...CALL_OPTS }, async (request) => {
     uid,
     taskType: "faucet",
     points: config.points.faucet,
-    refId: receipt.hash,
+    refId: txHash,
   });
-  return { ok: true, ...result, txHash: receipt.hash, amount: amountStr };
+  return { ok: true, ...result, txHash, amount: amountStr };
 });
 
 module.exports = { claimFaucet };
