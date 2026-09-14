@@ -37,7 +37,10 @@ async function waitForTx(provider, hash) {
   return null;
 }
 
-const verifyTxHash = onCall(CALL_OPTS, async (request) => {
+// cpu:1/concurrency:80 (overrides the global cpu:0.5/concurrency:1): this
+// function polls the RPC for a receipt for many seconds, so it must not
+// serialize behind the global concurrency:1.
+const verifyTxHash = onCall({ ...CALL_OPTS, cpu: 1, concurrency: 80 }, async (request) => {
   const uid = requireAuth(request);
   const taskType = String(request.data?.taskType || "tx");
   const meta = TASK_META[taskType];
