@@ -674,3 +674,13 @@ img, svg, canvas, video { max-width: 100%; }
 :root[data-theme="light"] .task-card:hover { border-color: #e6c9a6; }
 /* Referral gradient border reads better a touch stronger on white */
 :root[data-theme="light"] .referral-inner { background: linear-gradient(180deg, #fff, #fdf6ee); }
+
+/* Light theme: keep disabled primary buttons legible (white-on-faint-orange
+   was nearly invisible), and flip the white wordmark to dark so it shows. */
+:root[data-theme="light"] .btn-primary:disabled {
+  opacity: 1; background: #f2e6d6; color: #b09a84; box-shadow: none; filter: none;
+}
+:root[data-theme="light"] .btn:disabled { opacity: 0.6; }
+:root[data-theme="light"] .brand img,
+:root[data-theme="light"] .hero-logo,
+:root[data-theme="light"] .brand-logo { filter: brightness(0) saturate(0); }
