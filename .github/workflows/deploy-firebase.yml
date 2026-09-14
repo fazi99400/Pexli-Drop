@@ -104,6 +104,26 @@ jobs:
             done
           done
 
+      # "Sign in with X" mints a Firebase custom token in xCallback via
+      # admin.auth().createCustomToken(). In Cloud Functions there is no key
+      # file, so the Admin SDK signs the token through the IAM signBlob API using
+      # the function's runtime service account — which must hold the
+      # "Service Account Token Creator" role ON ITSELF, or signing fails with
+      # "Permission iam.serviceAccounts.signBlob denied". Grant it (idempotent).
+      # Gen2 functions run as the Compute Engine default SA by default.
+      - name: Allow functions to mint custom tokens (X sign-in)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+          gcloud config set project pexli-drop --quiet
+          PROJNUM=$(gcloud projects describe pexli-drop --format='value(projectNumber)')
+          RUNTIME_SA="${PROJNUM}-compute@developer.gserviceaccount.com"
+          echo "→ granting Token Creator to $RUNTIME_SA on itself"
+          gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
+            --member="serviceAccount:${RUNTIME_SA}" \
+            --role="roles/iam.serviceAccountTokenCreator" --quiet || true
+
       # Delete retired functions' Cloud Run services to free CPU quota. These
       # were replaced (verifyFaucet→claimFaucet, verifySwap/verifyTx→verifyTxHash)
       # and are no longer in index.js, so scoped deploys never remove them; do it

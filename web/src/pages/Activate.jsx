@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { SocialCard } from "../components/Account";
+import { AccountLinks } from "../components/Account";
 import { WalletOnboard } from "../components/InAppWallet";
 import { getStoredAddress } from "../lib/localWallet";
 import { api } from "../lib/functions";
@@ -11,7 +11,7 @@ import Icon from "../components/Icon";
 // account to activate. The wallet's public address is what activates the
 // account (saved via setWallet inside WalletOnboard). Redirects once active.
 export default function Activate() {
-  const { profile, isActive, refreshProfile } = useAuth();
+  const { profile, isActive, refreshProfile, googleLinked, xLinked } = useAuth();
   const navigate = useNavigate();
   const syncedRef = useRef(false);
 
@@ -37,15 +37,14 @@ export default function Activate() {
   }, [profile, refreshProfile]);
 
   const hasWallet = !!profile?.walletAddress;
-  const hasX = !!profile?.xHandle;
 
   return (
     <div style={{ maxWidth: 620, margin: "0 auto", paddingTop: 28 }}>
       <div className="hero" style={{ padding: "24px 0 18px" }}>
         <h1 style={{ fontSize: "clamp(26px,5vw,40px)" }}>Activate your account</h1>
         <p>
-          Set up your in-app <span className="accent">Pexli</span> wallet and link your X account to
-          join the airdrop. Both are required — this keeps bots out.
+          Set up your in-app <span className="accent">Pexli</span> wallet and link both logins
+          (Google + X) to join the airdrop. This keeps bots out — one person, one account.
         </p>
       </div>
 
@@ -53,14 +52,17 @@ export default function Activate() {
         <span className={`chk ${hasWallet ? "done" : ""}`}>
           <Icon name={hasWallet ? "check" : "wallet"} size={16} /> Pexli wallet
         </span>
-        <span className={`chk ${hasX ? "done" : ""}`}>
-          <Icon name={hasX ? "check" : "x"} size={16} /> X account
+        <span className={`chk ${googleLinked ? "done" : ""}`}>
+          <Icon name={googleLinked ? "check" : "users"} size={16} /> Google
+        </span>
+        <span className={`chk ${xLinked ? "done" : ""}`}>
+          <Icon name={xLinked ? "check" : "x"} size={16} /> X account
         </span>
       </div>
 
       <div className="stack mt">
         <WalletOnboard onReady={refreshProfile} />
-        <SocialCard profile={profile} onSaved={refreshProfile} />
+        <AccountLinks profile={profile} onSaved={refreshProfile} />
       </div>
 
       <p className="subtle mt" style={{ textAlign: "center" }}>

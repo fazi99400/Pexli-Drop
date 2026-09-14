@@ -622,3 +622,13 @@ img, svg, canvas, video { max-width: 100%; }
   .points-pill { font-size: 13px; padding: 6px 10px; }
   .btn-sm { padding: 8px 10px; font-size: 12.5px; }
 }
+
+/* ---- Activation / Settings: link both logins ---- */
+.link-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 0; border-top: 1px solid var(--border-soft);
+}
+.link-row:first-of-type { border-top: none; }
+.link-name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; flex-wrap: wrap; }
+.link-name .mono { color: var(--muted); font-weight: 500; }
+.badge.on { display: inline-flex; align-items: center; gap: 5px; }

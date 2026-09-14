@@ -73,6 +73,40 @@ function providerKey(providerId) {
   return providerId;
 }
 
+// Derive the set of linked providers from a decoded ID token's identities.
+// Used to keep authProviders fresh after the user links a second provider
+// (e.g. an X-signup account later linking Google during activation).
+function providersFromToken(token = {}) {
+  const out = new Set();
+  const ids = token.firebase?.identities || {};
+  for (const k of Object.keys(ids)) {
+    if (k.includes("google")) out.add("google");
+    else if (k.includes("twitter") || k.includes("x.com")) out.add("twitter");
+  }
+  const sip = token.firebase?.sign_in_provider || "";
+  if (sip.includes("google")) out.add("google");
+  if (sip.includes("twitter") || sip.includes("x.com")) out.add("twitter");
+  return [...out];
+}
+
+// Create the canonical profile doc if it doesn't exist yet, and make sure the
+// referral code index is present. Idempotent. Shared by ensureProfile (client)
+// and the X login/sign-up callback (server), so an X-first account still gets a
+// full profile with a referral code.
+async function ensureProfileDoc(uid, { displayName = "", email = "", provider = "google" } = {}) {
+  const ref = db.collection("users").doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    await ref.set(newProfile({ uid, displayName, email, providerData: [{ providerId: provider }] }));
+  }
+  try {
+    await ensureReferralCode(uid);
+  } catch (e) {
+    console.warn("ensureReferralCode failed:", e.message);
+  }
+  return ref;
+}
+
 // Reverse index code → uid, so setReferrer can resolve a pasted code cheaply.
 async function ensureReferralCode(uid) {
   const code = referralCodeFor(uid);
@@ -85,25 +119,27 @@ async function ensureReferralCode(uid) {
 // owner admin — all idempotent, so no separate auth-trigger function is needed.
 const ensureProfile = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
-  const ref = db.collection("users").doc(uid);
-  const snap = await ref.get();
-  if (!snap.exists) {
-    await ref.set(
-      newProfile({
-        uid,
-        displayName: request.auth.token.name || "",
-        email: request.auth.token.email || "",
-        providerData: [{ providerId: request.auth.token.firebase?.sign_in_provider || "google" }],
-      }),
-    );
+  const ref = await ensureProfileDoc(uid, {
+    displayName: request.auth.token.name || "",
+    email: request.auth.token.email || "",
+    provider: request.auth.token.firebase?.sign_in_provider || "google",
+  });
+
+  // Refresh the linked-provider list + email from the current token, so linking
+  // a second provider (e.g. Google onto an X-first account) is reflected right
+  // away — this is what the activation "both logins" check reads. Merge-only.
+  try {
+    const provs = providersFromToken(request.auth.token);
+    const email = request.auth.token.email || "";
+    const upd = {};
+    if (provs.length) upd.authProviders = FieldValue.arrayUnion(...provs);
+    if (email) upd.email = email;
+    if (Object.keys(upd).length) await ref.set(upd, { merge: true });
+  } catch (e) {
+    console.warn("provider refresh failed:", e.message);
   }
   // Side effects must never crash profile creation — if the runtime SA lacks a
   // permission (e.g. to set custom claims) the profile still returns fine.
-  try {
-    await ensureReferralCode(uid);
-  } catch (e) {
-    console.warn("ensureReferralCode failed:", e.message);
-  }
   try {
     await maybeGrantAdmin(uid, request.auth.token.email, request.auth.token.admin === true);
   } catch (e) {
@@ -218,4 +254,12 @@ function publicProfile(d = {}) {
   };
 }
 
-module.exports = { ensureProfile, getMe, setReferrer, setWallet, publicProfile };
+module.exports = {
+  ensureProfile,
+  getMe,
+  setReferrer,
+  setWallet,
+  publicProfile,
+  ensureProfileDoc,
+  providersFromToken,
+};
