@@ -209,8 +209,25 @@ function SendToPexliCard() {
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState("");
   const [msg, setMsg] = useState(null);
+  const [pendingHash, setPendingHash] = useState(null); // sent, points not yet awarded
   const amount = config?.tx?.amountPex || "0.0004";
   const points = config?.points?.tx ?? 15;
+
+  // Award points for an already-sent tx (idempotent server-side). Kept separate
+  // so a transient verify failure never loses the PEX the user already sent.
+  async function awardFor(hash) {
+    setStep("Confirming…");
+    try {
+      const res = await api.verifyTxHash({ hash, taskType: "tx" });
+      setMsg({ ok: true, hash: res.data.txHash, text: `Sent ${amount} PEX (+${points} pts)` });
+      setPendingHash(null);
+      refreshProfile();
+    } catch (e) {
+      // The send succeeded; only the points step failed → let them retry it.
+      setPendingHash(hash);
+      setMsg({ ok: false, text: `PEX sent, but awarding points failed (${e?.shortMessage || errMessage(e)}). Tap "Get points".` });
+    }
+  }
 
   async function send() {
     if (!signer) return;
@@ -222,17 +239,22 @@ function SendToPexliCard() {
         to: ethers.getAddress(TX_TARGET_ADDRESS),
         value: ethers.parseEther(String(amount)),
       });
-      setStep("Confirming…");
-      const res = await api.verifyTxHash({ hash: tx.hash, taskType: "tx" });
-      setMsg({ ok: true, hash: res.data.txHash, text: `Sent ${amount} PEX (+${points} pts)` });
+      setPendingHash(tx.hash);
+      await awardFor(tx.hash);
       setTimeout(() => refreshBalance(), 1500);
-      refreshProfile();
     } catch (e) {
       setMsg({ ok: false, text: e?.shortMessage || errMessage(e) });
     } finally {
       setBusy(false);
       setStep("");
     }
+  }
+
+  async function retry() {
+    setBusy(true);
+    await awardFor(pendingHash);
+    setBusy(false);
+    setStep("");
   }
 
   return (
@@ -245,9 +267,16 @@ function SendToPexliCard() {
         Send <b>{amount} PEX</b> to the Pexli address in one tap — no address to type — and earn points.
         Repeats every {config?.locks?.txHrs ?? 1}h.
       </p>
-      <button className="btn btn-primary" onClick={send} disabled={busy}>
-        {busy ? (step || "Working…") : `Send ${amount} PEX`}
-      </button>
+      <div className="row">
+        <button className="btn btn-primary" onClick={send} disabled={busy || !!pendingHash}>
+          {busy ? (step || "Working…") : `Send ${amount} PEX`}
+        </button>
+        {pendingHash && (
+          <button className="btn btn-sm" onClick={retry} disabled={busy}>
+            {busy ? "…" : "Get points"}
+          </button>
+        )}
+      </div>
       {msg && (
         <p className={`msg ${msg.ok ? "ok" : "err"}`}>
           {msg.text} {msg.ok && msg.hash && <TxLink hash={msg.hash} />}
