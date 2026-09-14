@@ -368,3 +368,32 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 @media (max-width: 420px) {
   .wl-seed { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Swap: fixed-in arrow + tidy rows */
+.swap-arrow-sm { color: var(--muted); font-weight: 700; flex-shrink: 0; }
+.swap-row { align-items: center; flex-wrap: wrap; }
+.swap-row .task-input { min-width: 0; }
+.swap-row .wl-select { flex: 0 0 auto; }
+
+/* ---- Mobile optimisation for the wallet / faucet / swap ---- */
+@media (max-width: 560px) {
+  .panel { padding: 15px; }
+  /* Primary actions go full-width and easy to tap on phones */
+  .panel > .btn-primary,
+  .panel .stack > .btn-primary { width: 100%; justify-content: center; }
+  .wl-tabs { gap: 5px; }
+  .wl-tab { padding: 9px 8px; font-size: 13px; }
+  .wl-seed { grid-template-columns: repeat(2, 1fr); gap: 7px; }
+  .swap-row { gap: 8px; }
+  .swap-row .task-input[readonly] { flex: 1 1 auto; }
+  .swap-row .wl-select { min-width: 96px; }
+  /* Address / balance rows wrap instead of overflowing */
+  .row.spread { gap: 8px; }
+  .kv .mono { word-break: break-all; }
+  .btn, .btn-sm { min-height: 40px; }
+  .task-input { font-size: 16px; } /* stop iOS zoom-on-focus */
+}
+@media (max-width: 380px) {
+  .wl-word { font-size: 12px; }
+  .card-title { font-size: 15px; }
+}

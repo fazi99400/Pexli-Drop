@@ -19,9 +19,19 @@ const TASK_META = {
 // Fetch a receipt, retrying briefly since the client may call right after
 // broadcasting (before the tx is mined).
 async function waitForReceipt(provider, hash) {
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 12; i++) {
     const r = await provider.getTransactionReceipt(hash).catch(() => null);
     if (r) return r;
+    await new Promise((res) => setTimeout(res, 2500));
+  }
+  return null;
+}
+
+// Poll for the tx body too (some RPCs index it a moment after the receipt).
+async function waitForTx(provider, hash) {
+  for (let i = 0; i < 6; i++) {
+    const t = await provider.getTransaction(hash).catch(() => null);
+    if (t) return t;
     await new Promise((res) => setTimeout(res, 2000));
   }
   return null;
@@ -50,24 +60,30 @@ const verifyTxHash = onCall(CALL_OPTS, async (request) => {
   }
 
   const provider = chain.getProvider();
-  const tx = await provider.getTransaction(hash).catch(() => null);
-  if (!tx) throw new HttpsError("not-found", "That transaction isn't visible on-chain yet. Try again in a moment.");
-
-  // Must be sent FROM the user's own wallet.
-  if (chain.lc(tx.from) !== chain.lc(user.walletAddress)) {
-    throw new HttpsError("failed-precondition", "That transaction wasn't sent from your wallet.");
-  }
-
+  // Wait for the receipt first — it proves the tx was mined, and carries the
+  // canonical from/to/status. The tx body (for value) is polled separately.
   const receipt = await waitForReceipt(provider, hash);
   if (!receipt) throw new HttpsError("not-found", "Transaction not confirmed yet. Try again in a moment.");
   if (receipt.status !== 1) throw new HttpsError("failed-precondition", "That transaction failed on-chain.");
 
+  const tx = await waitForTx(provider, hash); // may be null if the RPC lags
+  const from = chain.lc(receipt.from || tx?.from);
+  const to = chain.lc(receipt.to || tx?.to);
+
+  // Must be sent FROM the user's own wallet.
+  if (from !== chain.lc(user.walletAddress)) {
+    throw new HttpsError("failed-precondition", "That transaction wasn't sent from your wallet.");
+  }
+
   // Destination / value checks per task.
-  const to = chain.lc(tx.to);
   if (taskType === "tx") {
     const target = chain.lc(params.TX_TARGET_ADDRESS.value());
     if (to !== target) throw new HttpsError("failed-precondition", "That transaction wasn't sent to the Pexli address.");
-    if (BigInt(tx.value || 0n) <= 0n) throw new HttpsError("failed-precondition", "Send a positive amount of PEX.");
+    // Value check only when the tx body is readable; the receipt already proves
+    // it succeeded, so a lagging RPC shouldn't block the reward.
+    if (tx && BigInt(tx.value || 0n) <= 0n) {
+      throw new HttpsError("failed-precondition", "Send a positive amount of PEX.");
+    }
   } else if (taskType === "swap") {
     const router = chain.lc(params.DEX_ROUTER_ADDRESS.value());
     if (to !== router) throw new HttpsError("failed-precondition", "That transaction wasn't a swap on the PexSwap router.");

@@ -31,6 +31,10 @@ export const SWAP_CONFIG = {
   // Default slippage tolerance (fraction). 0.005 = 0.5%.
   slippage: 0.005,
 
+  // The swap always spends this fixed amount of native PEX; the user only picks
+  // which token to receive. (Set to "" to allow a free-form amount instead.)
+  fixedAmountPex: "0.0004",
+
   // Extra tokens to show even before any pool is discovered (optional). Native
   // PEX is always included. Each: { symbol, name, decimals, lane, address?, id? }.
   tokens: [],

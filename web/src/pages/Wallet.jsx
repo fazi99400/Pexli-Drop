@@ -6,7 +6,7 @@ import { api, errMessage } from "../lib/functions";
 import { ethers, explorerTxUrl } from "../lib/localWallet";
 import { TX_TARGET_ADDRESS } from "../lib/chain";
 import { SWAP_CONFIG, swapEnabled, NATIVE_PEX } from "../lib/swapConfig";
-import { loadTokenUniverse, loadPools, quote as swapQuote, executeSwap } from "../lib/swap";
+import { loadTokenUniverse, poolFor, quote as swapQuote, executeSwap } from "../lib/swap";
 import Icon from "../components/Icon";
 
 // The wallet hub: unlock/create, manage, faucet, swap, send — all in-app.
@@ -92,44 +92,35 @@ function FaucetCard() {
   );
 }
 
-// --- Swap: in-page, SDK-backed, signed by the in-browser wallet -------------
+// --- Swap: fixed 0.0004 PEX in, user picks the token to receive -------------
+// SDK-backed (pools + quote from @lifelox/dex-sdk), signed by the in-app wallet.
 function SwapCard() {
   const { signer, refreshBalance } = useWallet();
-  const fixed = SWAP_CONFIG.fixedPool;
+  const amount = SWAP_CONFIG.fixedAmountPex || "0.0004";
   const [pools, setPools] = useState(null);
-  const [tokens, setTokens] = useState(fixed ? [fixed.tokenIn, fixed.tokenOut] : [NATIVE_PEX]);
+  const [outTokens, setOutTokens] = useState([]); // tokens that have a PEX pool
   const [loadErr, setLoadErr] = useState("");
-  const [inKey, setInKey] = useState(fixed ? tokenKey(fixed.tokenIn) : "native");
-  const [outKey, setOutKey] = useState(fixed ? tokenKey(fixed.tokenOut) : "");
-  const [amount, setAmount] = useState("");
+  const [outKey, setOutKey] = useState("");
   const [q, setQ] = useState(null);
   const [step, setStep] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
-  const tokenIn = tokens.find((t) => tokenKey(t) === inKey);
-  const tokenOut = tokens.find((t) => tokenKey(t) === outKey);
+  const tokenOut = outTokens.find((t) => tokenKey(t) === outKey);
 
-  // Load pools (+ token universe in any-pool mode) once.
+  // Load pools + the tokens that can actually be bought with PEX (a direct pool
+  // with PEX). The user only chooses which of these to receive.
   useEffect(() => {
     if (!swapEnabled()) return;
     let alive = true;
     (async () => {
       try {
-        if (fixed) {
-          const p = await loadPools();
-          if (alive) setPools(p);
-        } else {
-          const { pools: p, tokens: ts } = await loadTokenUniverse();
-          if (alive) {
-            setPools(p);
-            setTokens(ts);
-            if (!outKey) {
-              const firstOther = ts.find((t) => tokenKey(t) !== "native");
-              if (firstOther) setOutKey(tokenKey(firstOther));
-            }
-          }
-        }
+        const { pools: p, tokens: ts } = await loadTokenUniverse();
+        const buyable = ts.filter((t) => tokenKey(t) !== "native" && poolFor(p, NATIVE_PEX, t));
+        if (!alive) return;
+        setPools(p);
+        setOutTokens(buyable);
+        if (buyable.length) setOutKey(tokenKey(buyable[0]));
       } catch (e) {
         if (alive) setLoadErr(e?.message || "Could not load pools.");
       }
@@ -139,26 +130,18 @@ function SwapCard() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced quote.
+  // Quote PEX -> selected token for the fixed amount.
   useEffect(() => {
-    if (!pools || !tokenIn || !tokenOut || inKey === outKey || !(Number(amount) > 0)) {
+    if (!pools || !tokenOut) {
       setQ(null);
       return;
     }
-    let alive = true;
-    const t = setTimeout(() => {
-      try {
-        const res = swapQuote(pools, tokenIn, tokenOut, amount);
-        if (alive) setQ(res);
-      } catch (e) {
-        if (alive) setQ(null);
-      }
-    }, 350);
-    return () => {
-      alive = false;
-      clearTimeout(t);
-    };
-  }, [pools, inKey, outKey, amount, tokenIn, tokenOut]);
+    try {
+      setQ(swapQuote(pools, NATIVE_PEX, tokenOut, amount));
+    } catch (e) {
+      setQ(null);
+    }
+  }, [pools, outKey, tokenOut, amount]);
 
   if (!swapEnabled()) {
     return (
@@ -169,19 +152,13 @@ function SwapCard() {
     );
   }
 
-  function flip() {
-    setInKey(outKey);
-    setOutKey(inKey);
-    setQ(null);
-  }
-
   async function doSwap() {
-    if (!signer || !q?.pool) return;
+    if (!signer || !q?.pool || !tokenOut) return;
     setBusy(true);
     setMsg(null);
     try {
       const receipt = await executeSwap(signer, {
-        tokenIn,
+        tokenIn: NATIVE_PEX,
         tokenOut,
         amountInHuman: amount,
         minOutRaw: q.minOutRaw,
@@ -189,8 +166,6 @@ function SwapCard() {
         onStep: setStep,
       });
       setMsg({ ok: true, hash: receipt.hash, text: "Swap complete" });
-      setAmount("");
-      setQ(null);
       setTimeout(() => refreshBalance(), 1500);
     } catch (e) {
       setMsg({ ok: false, text: e?.shortMessage || e?.reason || e?.message || "Swap failed." });
@@ -200,37 +175,36 @@ function SwapCard() {
     }
   }
 
-  const noPool = !!pools && !!tokenIn && !!tokenOut && inKey !== outKey && Number(amount) > 0 && !q;
-  const TokenSelect = ({ value, onChange, disabled }) => (
-    <select className="task-input wl-select" value={value} disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}>
-      {tokens.map((t) => <option key={tokenKey(t)} value={tokenKey(t)}>{t.symbol}</option>)}
-    </select>
-  );
-
   return (
     <div className="panel">
       <h3 className="card-title"><Icon name="swap" /> Swap</h3>
+      <p className="task-desc">
+        Swap <b>{amount} PEX</b> for a token of your choice — one tap, signed by your own wallet.
+      </p>
       {!pools && !loadErr && <p className="subtle">Loading pools…</p>}
       {loadErr && <p className="msg err">{loadErr}</p>}
-      <div className="swap-row">
-        <input className="task-input" type="number" min="0" placeholder="0.0" value={amount}
-          onChange={(e) => setAmount(e.target.value)} />
-        <TokenSelect value={inKey} onChange={setInKey} disabled={!!fixed} />
-      </div>
-      <div className="swap-flip">
-        <button className="btn btn-sm btn-ghost" onClick={flip} disabled={!!fixed}>↓ swap</button>
-      </div>
-      <div className="swap-row">
-        <input className="task-input" readOnly placeholder="0.0"
-          value={q ? Number(q.amountOut).toFixed(6) : ""} />
-        <TokenSelect value={outKey} onChange={setOutKey} disabled={!!fixed} />
-      </div>
-      {inKey === outKey && <p className="subtle">Pick two different tokens.</p>}
-      {noPool && <p className="subtle">No pool for this pair yet.</p>}
-      <button className="btn btn-primary mt" onClick={doSwap} disabled={busy || !q?.pool || inKey === outKey}>
-        {busy ? (step || "Working…") : "Swap"}
-      </button>
+      {pools && outTokens.length === 0 && !loadErr && (
+        <p className="subtle">No PEX pools available to swap yet.</p>
+      )}
+      {outTokens.length > 0 && (
+        <>
+          <div className="swap-row">
+            <input className="task-input" readOnly value={`${amount} PEX`} />
+            <span className="swap-arrow-sm">→</span>
+            <select className="task-input wl-select" value={outKey} onChange={(e) => setOutKey(e.target.value)}>
+              {outTokens.map((t) => (
+                <option key={tokenKey(t)} value={tokenKey(t)}>{t.symbol}</option>
+              ))}
+            </select>
+          </div>
+          <p className="kv">
+            You receive: <b className="accent">{q ? `${Number(q.amountOut).toFixed(6)} ${tokenOut?.symbol || ""}` : "…"}</b>
+          </p>
+          <button className="btn btn-primary" onClick={doSwap} disabled={busy || !q?.pool}>
+            {busy ? (step || "Working…") : `Swap ${amount} PEX`}
+          </button>
+        </>
+      )}
       {msg && (
         <p className={`msg ${msg.ok ? "ok" : "err"}`}>
           {msg.text} {msg.ok && msg.hash && <TxLink hash={msg.hash} />}
@@ -288,6 +262,10 @@ function SendToPexliCard() {
         value: ethers.parseEther(String(amount)),
       });
       setPendingHash(tx.hash);
+      // Wait for the tx to be mined before asking the server to verify it —
+      // otherwise the RPC may not see it yet ("not visible on-chain").
+      setStep("Confirming…");
+      await tx.wait(1).catch(() => {});
       await awardFor(tx.hash);
       setTimeout(() => refreshBalance(), 1500);
     } catch (e) {
