@@ -122,11 +122,19 @@ jobs:
             fi
           done
 
-      # Deploy in small batches. A full "deploy --only functions" spins up a
-      # healthcheck container for EVERY function at once; ~28 of those plus the
+      # Deploy ONE function at a time. A full "deploy --only functions" spins up
+      # a healthcheck container for EVERY function at once; ~28 of those plus the
       # already-serving revisions blow past the project's Cloud Run CPU quota, so
-      # many functions fail. Deploying a few at a time keeps the simultaneous
-      # healthcheck CPU low enough to stay under quota — no quota bump needed.
+      # many functions fail.
+      #
+      # Even in small batches the early batches failed: while an old cpu:1
+      # revision still serves, its new cpu:0.5 revision needs 1.5 CPU for that
+      # one service during healthcheck, and 4 of those at once exhausted the
+      # quota before any had migrated. Deploying strictly one at a time keeps the
+      # transient peak to a single service's +0.5 CPU, and every successful
+      # migration frees 0.5 CPU (old cpu:1 revision torn down) BEFORE the next
+      # function deploys — so headroom grows as the run proceeds and the whole
+      # set converges in a single run. No quota bump needed.
       - name: Deploy Firestore rules & indexes, then functions in batches
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
@@ -153,7 +161,7 @@ jobs:
           for fn in $FNS; do
             if [ -z "$BATCH" ]; then BATCH="functions:$fn"; else BATCH="$BATCH,functions:$fn"; fi
             N=$((N + 1))
-            if [ "$N" -ge 4 ]; then deploy_batch "$BATCH"; BATCH=""; N=0; fi
+            if [ "$N" -ge 1 ]; then deploy_batch "$BATCH"; BATCH=""; N=0; fi
           done
           deploy_batch "$BATCH"
 
