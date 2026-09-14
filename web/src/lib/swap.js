@@ -89,25 +89,31 @@ export async function loadTokenUniverse() {
   }
   const tokens = [{ ...NATIVE_PEX }];
   const keys = new Set(["native", "sol:" + ZERO]);
-  for (const s of seen.values()) {
-    if (s.lane === "solidity" && String(s.address).toLowerCase() === ZERO) continue;
-    try {
-      if (s.lane === "rust") {
-        const meta = await fetchRustTokenMeta(client, BigInt(s.id));
-        const key = "rust:" + s.id;
-        if (keys.has(key)) continue;
-        keys.add(key);
-        tokens.push({ key, symbol: meta.symbol || `PXC#${s.id}`, name: meta.name || `Rust token ${s.id}`, decimals: meta.decimals ?? 8, lane: "rust", id: Number(s.id) });
-      } else {
-        const key = "sol:" + String(s.address).toLowerCase();
-        if (keys.has(key)) continue;
-        keys.add(key);
+  // Read every token's metadata in PARALLEL. ethers batches concurrent calls
+  // into a single JSON-RPC request, so this is ~one round-trip instead of one
+  // per token — the difference between a snappy and a sluggish swap card.
+  const sides = [...seen.values()].filter(
+    (s) => !(s.lane === "solidity" && String(s.address).toLowerCase() === ZERO),
+  );
+  const results = await Promise.all(
+    sides.map(async (s) => {
+      try {
+        if (s.lane === "rust") {
+          const meta = await fetchRustTokenMeta(client, BigInt(s.id));
+          return { key: "rust:" + s.id, symbol: meta.symbol || `PXC#${s.id}`, name: meta.name || `Rust token ${s.id}`, decimals: meta.decimals ?? 8, lane: "rust", id: Number(s.id) };
+        }
         const erc = new ethers.Contract(s.address, ERC20_ABI, provider);
         const [symbol, decimals] = await Promise.all([erc.symbol().catch(() => "TKN"), erc.decimals().catch(() => 18)]);
-        tokens.push({ key, symbol, name: symbol, decimals: Number(decimals), lane: "solidity", address: s.address });
+        return { key: "sol:" + String(s.address).toLowerCase(), symbol, name: symbol, decimals: Number(decimals), lane: "solidity", address: s.address };
+      } catch (e) {
+        return null; // skip tokens whose metadata can't be read
       }
-    } catch (e) {
-      /* skip tokens whose metadata can't be read */
+    }),
+  );
+  for (const t of results) {
+    if (t && !keys.has(t.key)) {
+      keys.add(t.key);
+      tokens.push(t);
     }
   }
   for (const t of SWAP_CONFIG.tokens || []) {
@@ -146,20 +152,34 @@ export function quote(pools, tokenIn, tokenOut, amountInHuman) {
   };
 }
 
-// Send a tx, retrying once on a transient RPC hiccup. The Pexli RPC sometimes
-// fails the FIRST eth_estimateGas of a session with "missing revert data" (an
-// empty-revert artifact, not a real revert — the same call succeeds moments
-// later). We pass an explicit gasLimit so ethers skips estimateGas entirely,
-// and still retry once for any other cold-start blip.
+// Read-call a request, retrying while the RPC returns an EMPTY revert
+// ("missing revert data") — a cold/slow-node artifact, not a real revert. A
+// revert that carries data is deterministic, so we surface it immediately.
+async function callWithRetry(provider, req, tries = 4) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await provider.call(req);
+    } catch (e) {
+      if (e && e.data && e.data !== "0x") throw e; // real revert with a reason
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+// Send with an explicit gasLimit so ethers never runs eth_estimateGas (whose
+// cold-call revert is the usual "missing revert data"). One retry for a
+// transient broadcast blip.
 async function sendTx(signer, req, gasLimit) {
   const full = { ...req, gasLimit };
   try {
     return await signer.sendTransaction(full);
   } catch (e) {
     const m = String(e?.shortMessage || e?.message || "");
-    // Don't retry a clear user rejection or an insufficient-funds error.
-    if (/rejected|denied|insufficient funds/i.test(m)) throw e;
-    await new Promise((r) => setTimeout(r, 900));
+    if (/rejected|denied|insufficient funds|nonce|already known/i.test(m)) throw e;
+    await new Promise((r) => setTimeout(r, 700));
     return signer.sendTransaction(full);
   }
 }
@@ -199,11 +219,17 @@ export async function executeSwap(signer, { tokenIn, tokenOut, amountInHuman, mi
     functionName: "swapExactInput",
     args: [assetArg(tokenIn), assetArg(tokenOut), amountIn, minOutRaw, to, deadline],
   });
-  const tx = await sendTx(signer, {
-    to: router,
-    data,
-    value: isNativeTok(tokenIn) ? amountIn : 0n,
-  }, 700000n);
+  const value = isNativeTok(tokenIn) ? amountIn : 0n;
+
+  // Validate the swap with a read-only simulation FIRST (retried through any
+  // cold "missing revert data" blips). This warms the RPC and proves the swap
+  // will succeed, so we never broadcast — and never spend gas on — a tx that
+  // would revert. Only after a clean simulation do we send with a fixed gas
+  // limit (no estimateGas), so the first real attempt goes through.
+  const provider = getProvider();
+  await callWithRetry(provider, { to: router, data, value, from: to });
+
+  const tx = await sendTx(signer, { to: router, data, value }, 700000n);
   const receipt = await tx.wait(1);
   if (!receipt || receipt.status !== 1) throw new Error("Swap transaction failed.");
   return receipt;

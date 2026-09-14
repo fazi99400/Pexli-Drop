@@ -60,10 +60,12 @@ export function getProvider() {
   if (_provider) return _provider;
   const rpc = PEXLI_CHAIN.rpcUrls[0];
   if (!rpc) throw new Error("Pexli RPC is not configured.");
-  _provider = new ethers.JsonRpcProvider(rpc, {
-    chainId: parseInt(PEXLI_CHAIN.chainId, 16),
-    name: PEXLI_CHAIN.chainName,
-  });
+  // staticNetwork tells ethers the chain never changes, so it STOPS doing an
+  // eth_chainId network-detection round-trip around every call. On the slow
+  // Pexli test RPC that extra probe is a big source of latency AND of the
+  // intermittent "missing revert data" (a cold probe racing the real call).
+  const net = new ethers.Network(PEXLI_CHAIN.chainName, parseInt(PEXLI_CHAIN.chainId, 16));
+  _provider = new ethers.JsonRpcProvider(rpc, net, { staticNetwork: net });
   return _provider;
 }
 
