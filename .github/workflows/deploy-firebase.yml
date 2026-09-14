@@ -168,7 +168,11 @@ jobs:
       # "internal". Grant public invoke on every function's Cloud Run service.
       # Safe: onCall verifies the Firebase Auth token in-code; the HTTP endpoints
       # (xCallback / token-guarded bootstrapAdmin) are meant to be public.
+      # Runs even when a batch failed (if: always) so a NEWLY created function
+      # (e.g. verifyTxHash) still becomes invocable despite a partial deploy —
+      # otherwise it exists but every call returns "internal".
       - name: Allow public invocation of functions (fix "internal")
+        if: ${{ always() }}
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
         run: |
