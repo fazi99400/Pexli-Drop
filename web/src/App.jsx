@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, Link } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import Header from "./components/Header";
@@ -7,14 +7,18 @@ import Landing from "./pages/Landing";
 import Faq from "./pages/Faq";
 import Guide from "./pages/Guide";
 import Dashboard from "./pages/Dashboard";
-import Admin from "./pages/Admin";
 import Activate from "./pages/Activate";
-import Settings from "./pages/Settings";
-import WalletPage from "./pages/Wallet";
-import WalletSecurity from "./pages/WalletSecurity";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import { LINKS } from "./lib/chain";
+
+// Heavy routes (wallet pulls ethers + viem + the DEX SDK; admin is large and
+// rarely used) load on demand so the first paint of the landing/dashboard is
+// light and fast.
+const WalletPage = lazy(() => import("./pages/Wallet"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Admin = lazy(() => import("./pages/Admin"));
+const WalletSecurity = lazy(() => import("./pages/WalletSecurity"));
 
 // Shown when the build has no Firebase env config — prevents the blank page and
 // tells the operator exactly what to set.
@@ -115,6 +119,7 @@ export default function App() {
         </div>
       )}
       <main className="container">
+        <Suspense fallback={<div className="center"><div className="spin" /></div>}>
         <Routes>
           <Route path="/" element={<MainRoutes />} />
           <Route path="/terms" element={<Terms />} />
@@ -131,6 +136,7 @@ export default function App() {
           <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </main>
       <footer className="footer">
         <div className="container">
