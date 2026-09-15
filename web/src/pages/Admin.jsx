@@ -613,6 +613,60 @@ function ModerationTab() {
   );
 }
 
+// --- Bot accounts (leaderboard filler) ---
+function BotAccountsCard() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function seed() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api.seedBotUsers();
+      setMsg({ ok: true, text: `Created ${res.data.created} bot accounts with random names, points and wallets.` });
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    if (!confirm("Remove all bot accounts from the leaderboard?")) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api.removeBotUsers();
+      setMsg({ ok: true, text: `Removed ${res.data.removed} bot accounts.` });
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card mb">
+      <h3 className="task-title">Bot accounts (leaderboard filler)</h3>
+      <p className="subtle">
+        Seeds 100 Firestore-only accounts with random human-looking names, random points, and a
+        freshly generated (never funded, never reused) wallet address each — so the leaderboard
+        looks populated. They can never sign in, can never claim the faucet, and are excluded from
+        the admin dashboard, the Users list, the CSV export, and daily rank-bonus rewards. Running
+        “Seed” again resets all 100 to fresh random values.
+      </p>
+      <div className="row">
+        <button className="btn btn-sm btn-primary" onClick={seed} disabled={busy}>
+          {busy ? "Working…" : "Seed 100 bot accounts"}
+        </button>
+        <button className="btn btn-sm btn-danger" onClick={remove} disabled={busy}>
+          Remove all bots
+        </button>
+      </div>
+      <Msg msg={msg} />
+    </div>
+  );
+}
+
 // --- Users + CSV export ---
 function UsersTab() {
   const [rows, setRows] = useState([]);
@@ -655,6 +709,7 @@ function UsersTab() {
 
   return (
     <div>
+      <BotAccountsCard />
       <div className="row spread">
         <div className="row">
           <input

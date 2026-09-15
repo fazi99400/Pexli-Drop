@@ -99,6 +99,8 @@ exports.grantAdmin = admin.grantAdmin;
 exports.bootstrapAdmin = admin.bootstrapAdmin;
 exports.adjustPoints = admin.adjustPoints;
 exports.adminStats = admin.adminStats;
+exports.seedBotUsers = admin.seedBotUsers;
+exports.removeBotUsers = admin.removeBotUsers;
 
 // Leaderboard
 exports.getLeaderboard = leaderboard.getLeaderboard;

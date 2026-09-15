@@ -6,6 +6,11 @@ const { CALL_OPTS, requireAuth, requireAdmin } = require("./callable");
 const { getConfig } = require("./config");
 const { awardPoints } = require("./points");
 
+// Bot filler accounts (seeded via admin.seedBotUsers) never number more than
+// this, so over-fetching by this much guarantees 100 real users are still
+// found even if every bot happens to outrank them.
+const BOT_HEADROOM = 100;
+
 // Points a given rank earns in the daily distribution.
 function rewardForRank(rank, r) {
   if (rank === 1) return r.rank1;
@@ -44,10 +49,18 @@ async function distributeLeaderboardRewards() {
   const rewards = config.leaderboard.rewards;
   const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 
-  const snap = await db.collection("users").orderBy("points", "desc").limit(100).get();
+  // Over-fetch so real users still fill 100 ranks even though bot filler
+  // accounts (isBot: true) occupy some top slots on the public leaderboard —
+  // bots must never consume a real reward tier meant for a real player.
+  const snap = await db
+    .collection("users")
+    .orderBy("points", "desc")
+    .limit(100 + BOT_HEADROOM)
+    .get();
+  const realDocs = snap.docs.filter((d) => !d.data().isBot).slice(0, 100);
   let rank = 0;
   let awarded = 0;
-  for (const doc of snap.docs) {
+  for (const doc of realDocs) {
     rank += 1;
     const bonus = rewardForRank(rank, rewards);
     if (bonus <= 0) continue;
@@ -66,8 +79,8 @@ async function distributeLeaderboardRewards() {
       }
     }
   }
-  console.log(`Leaderboard ${dateStr}: ranked ${snap.size}, awarded ${awarded}.`);
-  return { ranked: snap.size, awarded, date: dateStr };
+  console.log(`Leaderboard ${dateStr}: ranked ${realDocs.length}, awarded ${awarded}.`);
+  return { ranked: realDocs.length, awarded, date: dateStr };
 }
 
 // Daily job at 00:00 UTC (a fixed, predictable time — easier to reason about
