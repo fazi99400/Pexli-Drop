@@ -2,8 +2,10 @@ import { useEffect, useState, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, Link } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import Header from "./components/Header";
+import BottomNav from "./components/BottomNav";
 import Login from "./pages/Login";
 import Landing from "./pages/Landing";
+import LeaderboardPage from "./pages/LeaderboardPage";
 import Faq from "./pages/Faq";
 import Guide from "./pages/Guide";
 import Dashboard from "./pages/Dashboard";
@@ -120,7 +122,7 @@ export default function App() {
           </div>
         </div>
       )}
-      <main className="container">
+      <main className={`container${user ? " with-bnav" : ""}`}>
         <Suspense fallback={<div className="center"><div className="spin" /></div>}>
         <Routes>
           <Route path="/" element={<MainRoutes />} />
@@ -134,6 +136,7 @@ export default function App() {
             element={!user ? <Login /> : isActive ? <Navigate to="/" replace /> : <Activate />}
           />
           <Route path="/settings" element={user ? <Settings /> : <Login />} />
+          <Route path="/leaderboard" element={user ? <LeaderboardPage /> : <Login />} />
           <Route path="/referrals" element={user ? <Referrals /> : <Login />} />
           <Route path="/wallet" element={user ? <WalletPage /> : <Login />} />
           <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" replace />} />
@@ -159,6 +162,7 @@ export default function App() {
           </div>
         </div>
       </footer>
+      {user && <BottomNav />}
     </>
   );
 }
