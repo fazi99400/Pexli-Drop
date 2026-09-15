@@ -58,15 +58,31 @@ export function AuthProvider({ children }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Set when the server refuses a call because the account is blocked (see
+  // requireNotBlocked in functions/src/callable.js, which attaches structured
+  // `details` rather than just a message so this never relies on string
+  // matching). { blockedUntil: ms|null, reason: string } | null.
+  const [blockInfo, setBlockInfo] = useState(null);
+
+  // Firebase callable errors carry the thrown HttpsError's third argument as
+  // `.details`. Returns true (and records it) if this error is a block.
+  const applyIfBlocked = useCallback((e) => {
+    if (e?.details?.blocked) {
+      setBlockInfo({ blockedUntil: e.details.blockedUntil ?? null, reason: e.details.reason || "" });
+      return true;
+    }
+    return false;
+  }, []);
 
   const refreshProfile = useCallback(async () => {
     try {
       const res = await api.getMe();
       setProfile(res.data);
+      setBlockInfo(null); // a successful call proves the account isn't (or is no longer) blocked
     } catch (e) {
-      console.warn("getMe failed", e?.message);
+      if (!applyIfBlocked(e)) console.warn("getMe failed", e?.message);
     }
-  }, []);
+  }, [applyIfBlocked]);
 
   // Bind a captured referral code once the user is signed in (set-once).
   const applyPendingReferral = useCallback(async (prof) => {
@@ -110,6 +126,7 @@ export function AuthProvider({ children }) {
     }
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
+      setBlockInfo(null); // reset on every auth transition; a real block re-sets it below
       if (u) {
         try {
           await api.ensureProfile();
@@ -119,7 +136,7 @@ export function AuthProvider({ children }) {
           prof = await applyPendingReferral(prof);
           setProfile(prof);
         } catch (e) {
-          console.warn("post-login setup failed", e?.message);
+          if (!applyIfBlocked(e)) console.warn("post-login setup failed", e?.message);
         }
       } else {
         setProfile(null);
@@ -127,7 +144,7 @@ export function AuthProvider({ children }) {
       }
       setLoading(false);
     });
-  }, [applyPendingReferral]);
+  }, [applyPendingReferral, applyIfBlocked]);
 
   // Live config (task toggles / point values / locks). Falls back to defaults
   // when the doc doesn't exist yet or rules block the read, so the dashboard
@@ -177,8 +194,14 @@ export function AuthProvider({ children }) {
   const xLinked = !!(profile && profile.xHandle);
 
   // Account is "active" (can enter the airdrop) once it has a reward wallet AND
-  // BOTH logins linked (Google + X) — one person, one X, one Google.
-  const isActive = !!(profile && profile.walletAddress && xLinked && googleLinked);
+  // BOTH logins linked (Google + X) — one person, one X, one Google. An admin
+  // can waive the two-provider requirement per-account (profile.forceActivated)
+  // for a legitimate single-provider sign-up; a wallet is still required.
+  const isActive = !!(
+    profile &&
+    profile.walletAddress &&
+    (profile.forceActivated || (xLinked && googleLinked))
+  );
 
   const value = {
     user,
@@ -190,6 +213,7 @@ export function AuthProvider({ children }) {
     isActive,
     googleLinked,
     xLinked,
+    blockInfo,
     refreshProfile,
     setProfile,
     signInGoogle,

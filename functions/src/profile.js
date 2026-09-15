@@ -3,7 +3,7 @@
 const crypto = require("crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { admin, db, FieldValue, Timestamp } = require("./init");
-const { CALL_OPTS, requireAuth, loadUser } = require("./callable");
+const { CALL_OPTS, requireAuth, loadUser, requireNotBlocked } = require("./callable");
 const { normalizeAddress, lc } = require("./chain");
 const params = require("./params");
 
@@ -146,6 +146,7 @@ const ensureProfile = onCall(CALL_OPTS, async (request) => {
     console.warn("maybeGrantAdmin failed:", e.message);
   }
   const fresh = await ref.get();
+  requireNotBlocked(fresh.data()); // surfaced on every sign-in, not just task actions
   return publicProfile(fresh.data());
 });
 
@@ -271,6 +272,7 @@ const setWallet = onCall(CALL_OPTS, async (request) => {
       if (idxSnap.exists && idxSnap.data().uid !== uid) {
         throw new HttpsError("already-exists", "That wallet address is already linked to another account.");
       }
+      if (userSnap.exists) requireNotBlocked(userSnap.data());
       const prev = userSnap.exists ? userSnap.data().walletAddress : null;
       if (prev && lc(prev) !== lower) {
         tx.delete(db.collection("walletIndex").doc(lc(prev)));
@@ -309,6 +311,11 @@ function publicProfile(d = {}) {
     referredBy: d.referredBy || null,
     referralCount: d.referralCount || 0,
     referralPointsEarned: d.referralPointsEarned || 0,
+    // Admin moderation
+    blocked: !!d.blocked,
+    blockedUntil: d.blockedUntil ? (d.blockedUntil.toMillis ? d.blockedUntil.toMillis() : Number(d.blockedUntil) || null) : null,
+    blockReason: d.blockReason || "",
+    forceActivated: !!d.forceActivated,
   };
 }
 

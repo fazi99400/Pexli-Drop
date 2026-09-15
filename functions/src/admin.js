@@ -249,6 +249,55 @@ const adjustPoints = onCall(CALL_OPTS, async (request) => {
   return { ok: true, uid, points: newTotal };
 });
 
+// --- Block / unblock accounts ------------------------------------------------
+// Temporary (durationHours) or permanent (permanent: true) block. Enforced
+// server-side at every point-earning action (awardPoints), the faucet, wallet
+// setup, and on every sign-in (ensureProfile/getMe) — see requireNotBlocked in
+// callable.js. A temporary block auto-expires the moment blockedUntil passes;
+// no scheduled cleanup needed.
+const blockUser = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const uid = String(request.data?.uid || "");
+  if (!uid) throw new HttpsError("invalid-argument", "Missing uid.");
+  const permanent = request.data?.permanent === true;
+  const hours = Math.max(1, Math.min(24 * 365, Number(request.data?.durationHours) || 24));
+  const reason = String(request.data?.reason || "").slice(0, 300);
+
+  const userRef = db.collection("users").doc(uid);
+  const snap = await userRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", "User not found.");
+
+  const blockedUntil = permanent ? null : Timestamp.fromMillis(Date.now() + hours * 3600000);
+  await userRef.set({ blocked: true, blockedUntil, blockReason: reason }, { merge: true });
+  return { ok: true, uid, permanent, blockedUntil: blockedUntil ? blockedUntil.toMillis() : null };
+});
+
+const unblockUser = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const uid = String(request.data?.uid || "");
+  if (!uid) throw new HttpsError("invalid-argument", "Missing uid.");
+  await db
+    .collection("users")
+    .doc(uid)
+    .set({ blocked: false, blockedUntil: null, blockReason: "" }, { merge: true });
+  return { ok: true, uid };
+});
+
+// --- Force-activate single-provider accounts ---------------------------------
+// Normal activation needs a wallet + BOTH Google and X linked (see AuthContext
+// isActive). Some accounts only ever had one provider (X-only sign-up that
+// never connected Google, or vice versa) — this lets an admin manually mark
+// them active anyway. A wallet is still required; this only waives the
+// two-provider requirement.
+const setForceActivated = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const uid = String(request.data?.uid || "");
+  if (!uid) throw new HttpsError("invalid-argument", "Missing uid.");
+  const value = request.data?.value !== false; // default true
+  await db.collection("users").doc(uid).set({ forceActivated: value }, { merge: true });
+  return { ok: true, uid, forceActivated: value };
+});
+
 // --- Analytics dashboard ----------------------------------------------------
 // One call returns everything the admin dashboard charts need. All time-series
 // come from the pointsLedger event log (every earn writes {uid,taskType,points,
@@ -629,6 +678,12 @@ function publicRow(uid, u) {
     points: u.points || 0,
     authProviders: u.authProviders || [],
     createdAt: tsToMs(u.createdAt),
+    blocked: !!u.blocked,
+    blockedUntil: u.blockedUntil ? (u.blockedUntil.toMillis ? u.blockedUntil.toMillis() : Number(u.blockedUntil) || null) : null,
+    blockReason: u.blockReason || "",
+    forceActivated: !!u.forceActivated,
+    xHandleSet: !!u.xHandle,
+    googleLinked: (u.authProviders || []).includes("google"),
   };
 }
 function tsToMs(ts) {
@@ -654,4 +709,7 @@ module.exports = {
   adminStats,
   seedBotUsers,
   removeBotUsers,
+  blockUser,
+  unblockUser,
+  setForceActivated,
 };

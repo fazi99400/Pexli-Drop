@@ -54,6 +54,36 @@ messagingSenderId: "…"`}
   );
 }
 
+// Shown for a blocked account instead of any normal route — the server
+// refuses every meaningful action anyway (see requireNotBlocked), so this
+// keeps the UI honest rather than leaving the user stuck on a broken page.
+function BlockedScreen({ blockInfo, onSignOut }) {
+  const until = blockInfo?.blockedUntil;
+  return (
+    <div className="center" style={{ padding: 24 }}>
+      <div className="card login-card" style={{ maxWidth: 460, textAlign: "left" }}>
+        <h2 className="section-title" style={{ marginTop: 0, color: "var(--red)" }}>
+          Account blocked
+        </h2>
+        <p className="subtle" style={{ fontSize: 15, color: "var(--text)" }}>
+          {until
+            ? `This account is temporarily blocked until ${new Date(until).toLocaleString()}.`
+            : "This account has been permanently blocked."}
+        </p>
+        {blockInfo?.reason && (
+          <p className="subtle">
+            <b>Reason:</b> {blockInfo.reason}
+          </p>
+        )}
+        <p className="subtle">If you believe this is a mistake, contact Pexli support.</p>
+        <button className="btn btn-sm mt" onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Human-readable copy for the ?x=<code> the X OAuth callback bounces back with.
 function xResultBanner(code, msg) {
   const map = {
@@ -72,7 +102,7 @@ function xResultBanner(code, msg) {
 }
 
 export default function App() {
-  const { user, isAdmin, isActive, loading, firebaseConfigured, refreshProfile } = useAuth();
+  const { user, isAdmin, isActive, loading, firebaseConfigured, refreshProfile, blockInfo, logout } = useAuth();
 
   // Global handler for the X OAuth return (?x=<code>&m=<detail>). Runs on any
   // route so the result is visible even when we redirect to /activate.
@@ -99,6 +129,10 @@ export default function App() {
         <div className="spin" />
       </div>
     );
+  }
+
+  if (blockInfo) {
+    return <BlockedScreen blockInfo={blockInfo} onSignOut={logout} />;
   }
 
   // The main app area, gated by sign-in + activation. Terms/Privacy are always
