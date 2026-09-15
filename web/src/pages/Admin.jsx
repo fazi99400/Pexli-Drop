@@ -245,6 +245,33 @@ function MiniStat({ label, v, allt, c }) {
   );
 }
 
+// Trigger the daily rank-bonus distribution on demand (idempotent per day).
+function RunLeaderboardButton() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  async function run() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api.runLeaderboardRewards();
+      const d = res.data || {};
+      setMsg({ ok: true, text: `Done — ranked ${d.ranked ?? 0}, awarded ${d.awarded ?? 0}.` });
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="row" style={{ gap: 10 }}>
+      {msg && <span className={`msg ${msg.ok ? "ok" : "err"}`} style={{ margin: 0 }}>{msg.text}</span>}
+      <button className="btn btn-sm btn-primary" onClick={run} disabled={busy}>
+        {busy ? "Running…" : "Run now"}
+      </button>
+    </div>
+  );
+}
+
 // --- Tasks, points, locks, approvals ---
 function ConfigTab() {
   const { config } = useAuth();
@@ -368,8 +395,11 @@ function ConfigTab() {
 
       <div className="card mt">
         <h3 className="task-title">Leaderboard (daily rank bonus)</h3>
-        <p className="subtle">Every 24h the top players earn these bonus points by rank.</p>
-        <div className="row">
+        <p className="subtle">
+          Runs automatically every day at 00:00 UTC — the top players earn these bonus points by
+          rank. Use “Run now” to distribute immediately (safe to click; it never pays twice per day).
+        </p>
+        <div className="row spread">
           <label className="toggle">
             <input
               type="checkbox"
@@ -383,6 +413,7 @@ function ConfigTab() {
             />
             <span>Enabled</span>
           </label>
+          <RunLeaderboardButton />
         </div>
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))" }}>
           {[

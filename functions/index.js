@@ -103,6 +103,7 @@ exports.adminStats = admin.adminStats;
 // Leaderboard
 exports.getLeaderboard = leaderboard.getLeaderboard;
 exports.dailyLeaderboardRewards = leaderboard.dailyLeaderboardRewards;
+exports.runLeaderboardRewards = leaderboard.runLeaderboardRewards;
 
 // Scheduled
 exports.expireTweetAssignments = scheduled.expireTweetAssignments;

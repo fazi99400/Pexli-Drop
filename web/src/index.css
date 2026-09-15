@@ -798,6 +798,28 @@ img, svg, canvas, video { max-width: 100%; }
   .dash-lb { display: none; }
   /* Tighten the top hero on phones so the app opens straight into content. */
   .hero { padding-top: 34px; }
+  /* The footer link row is cramped above the tab bar — hide it on mobile and
+     surface those links inside Settings instead. */
+  .footer { display: none; }
+  .desktop-only { display: none !important; }
+}
+
+/* Helpers: show a block only on mobile / only on desktop. */
+.mobile-only { display: none; }
+@media (max-width: 900px) {
+  .mobile-only { display: block; }
+}
+
+/* Bulletproof the primary button in light theme so it can never render as
+   white-on-white regardless of cascade order or a stale cached stylesheet. */
+:root[data-theme="light"] .btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+:root[data-theme="light"] .btn-primary:disabled {
+  background: #e6ebf2;
+  color: #97a0ad;
 }
 
 /* In installed standalone mode, pad the sticky header under the status bar. */
@@ -808,3 +830,7 @@ img, svg, canvas, video { max-width: 100%; }
 /* Install-app card (Settings) */
 .install-card { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .install-ic img { border-radius: 12px; display: block; }
+
+/* Settings "More" links card (mobile) */
+.links-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.links-grid .btn { flex: 1 1 auto; justify-content: center; min-width: 90px; }

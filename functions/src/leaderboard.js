@@ -2,7 +2,7 @@
 const { onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { db } = require("./init");
-const { CALL_OPTS, requireAuth } = require("./callable");
+const { CALL_OPTS, requireAuth, requireAdmin } = require("./callable");
 const { getConfig } = require("./config");
 const { awardPoints } = require("./points");
 
@@ -33,40 +33,58 @@ const getLeaderboard = onCall(CALL_OPTS, async (request) => {
   });
 });
 
-// Daily job: rank everyone, award the rank-tier bonus. Idempotent per day
-// (ledger refId includes the date), so a re-run never double-pays.
-const dailyLeaderboardRewards = onSchedule(
-  { schedule: "every 24 hours", region: "us-central1" },
-  async () => {
-    const config = await getConfig();
-    if (!config.leaderboard || !config.leaderboard.enabled) return;
-    const rewards = config.leaderboard.rewards;
-    const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+// The shared reward routine: rank the top 100 and award the rank-tier bonus.
+// Idempotent per UTC day (ledger refId includes the date), so a re-run — whether
+// from the daily schedule or a manual admin trigger — never double-pays.
+async function distributeLeaderboardRewards() {
+  const config = await getConfig();
+  if (!config.leaderboard || !config.leaderboard.enabled) {
+    return { ranked: 0, awarded: 0, skipped: "leaderboard disabled" };
+  }
+  const rewards = config.leaderboard.rewards;
+  const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 
-    const snap = await db.collection("users").orderBy("points", "desc").limit(100).get();
-    let rank = 0;
-    let awarded = 0;
-    for (const doc of snap.docs) {
-      rank += 1;
-      const bonus = rewardForRank(rank, rewards);
-      if (bonus <= 0) continue;
-      try {
-        await awardPoints({
-          uid: doc.id,
-          taskType: "leaderboard",
-          points: bonus,
-          refId: `${doc.id}:${dateStr}`,
-        });
-        awarded += 1;
-      } catch (e) {
-        // "already-exists" = already paid today; anything else we log and skip.
-        if (e.code !== "already-exists") {
-          console.error("leaderboard award failed", doc.id, e.message);
-        }
+  const snap = await db.collection("users").orderBy("points", "desc").limit(100).get();
+  let rank = 0;
+  let awarded = 0;
+  for (const doc of snap.docs) {
+    rank += 1;
+    const bonus = rewardForRank(rank, rewards);
+    if (bonus <= 0) continue;
+    try {
+      await awardPoints({
+        uid: doc.id,
+        taskType: "leaderboard",
+        points: bonus,
+        refId: `${doc.id}:${dateStr}`,
+      });
+      awarded += 1;
+    } catch (e) {
+      // "already-exists" = already paid today; anything else we log and skip.
+      if (e.code !== "already-exists") {
+        console.error("leaderboard award failed", doc.id, e.message);
       }
     }
-    console.log(`Leaderboard ${dateStr}: ranked ${snap.size}, awarded ${awarded}.`);
+  }
+  console.log(`Leaderboard ${dateStr}: ranked ${snap.size}, awarded ${awarded}.`);
+  return { ranked: snap.size, awarded, date: dateStr };
+}
+
+// Daily job at 00:00 UTC (a fixed, predictable time — easier to reason about
+// than "every 24 hours" drifting from deploy time).
+const dailyLeaderboardRewards = onSchedule(
+  { schedule: "0 0 * * *", timeZone: "UTC", region: "us-central1" },
+  async () => {
+    await distributeLeaderboardRewards();
   },
 );
 
-module.exports = { getLeaderboard, dailyLeaderboardRewards };
+// Admin-only: run the rank-bonus distribution right now (for testing, or to
+// catch up a missed run). Returns how many users were ranked/awarded.
+const runLeaderboardRewards = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const result = await distributeLeaderboardRewards();
+  return { ok: true, ...result };
+});
+
+module.exports = { getLeaderboard, dailyLeaderboardRewards, runLeaderboardRewards };

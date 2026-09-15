@@ -6,6 +6,7 @@ import { WalletManager, WalletOnboard } from "../components/InAppWallet";
 import { useWallet } from "../context/WalletContext";
 import { api, errMessage } from "../lib/functions";
 import Icon from "../components/Icon";
+import { LINKS } from "../lib/chain";
 import { canInstall, onInstallChange, promptInstall, isStandalone, isIOS } from "../lib/pwa";
 
 // Settings — manage the in-app wallet + socials here (kept off the dashboard).
@@ -40,7 +41,28 @@ export default function Settings() {
             </button>
           </div>
         </div>
+        <LinksCard />
       </div>
+    </div>
+  );
+}
+
+// Footer links live here on mobile (the page footer is hidden on small screens).
+function LinksCard() {
+  return (
+    <div className="panel mobile-only">
+      <h3 className="card-title">More</h3>
+      <div className="links-grid">
+        <Link className="btn btn-sm btn-ghost" to="/guide">Guide</Link>
+        <Link className="btn btn-sm btn-ghost" to="/faq">FAQ</Link>
+        <a className="btn btn-sm btn-ghost" href={LINKS.main} target="_blank" rel="noreferrer">Pexli</a>
+        <a className="btn btn-sm btn-ghost" href={LINKS.faucet} target="_blank" rel="noreferrer">Faucet</a>
+        <a className="btn btn-sm btn-ghost" href={LINKS.dex} target="_blank" rel="noreferrer">Lifelox</a>
+        <a className="btn btn-sm btn-ghost" href={LINKS.x} target="_blank" rel="noreferrer">X</a>
+      </div>
+      <p className="subtle" style={{ marginTop: 12, marginBottom: 0 }}>
+        Pexli Airdrop — All rights reserved by Pexli Labs
+      </p>
     </div>
   );
 }
