@@ -50,8 +50,11 @@ function faucetSigner() {
 
 // cpu:1/concurrency:80 (overrides the global cpu:0.5/concurrency:1): this
 // function holds the request open while it sends PEX and waits, so it must not
-// serialize behind the global concurrency:1.
-const claimFaucet = onCall({ ...CALL_OPTS, cpu: 1, concurrency: 80 }, async (request) => {
+// serialize behind the global concurrency:1. maxInstances:6 (overrides the
+// global maxInstances:4, since this is the highest-traffic on-chain action) —
+// 6 × 80 = 480 concurrent claims, sized for a few thousand daily users. See
+// the capacity note in index.js before raising further.
+const claimFaucet = onCall({ ...CALL_OPTS, cpu: 1, concurrency: 80, maxInstances: 6 }, async (request) => {
   const uid = requireAuth(request);
   const config = await requireTaskEnabled("faucet");
   const lockHrs = config.locks.faucetHrs;
