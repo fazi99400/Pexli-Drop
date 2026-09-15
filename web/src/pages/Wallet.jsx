@@ -6,7 +6,7 @@ import { api, errMessage } from "../lib/functions";
 import { ethers, explorerTxUrl } from "../lib/localWallet";
 import { TX_TARGET_ADDRESS } from "../lib/chain";
 import { SWAP_CONFIG, swapEnabled, NATIVE_PEX } from "../lib/swapConfig";
-import { loadTokenUniverse, poolFor, quote as swapQuote, executeSwap } from "../lib/swap";
+import { loadTokenUniverse, loadPools, poolFor, quote as swapQuote, executeSwap } from "../lib/swap";
 import Icon from "../components/Icon";
 
 // The wallet hub: unlock/create, manage, faucet, swap, send — all in-app.
@@ -123,6 +123,24 @@ function FaucetCard() {
 
 // --- Swap: fixed 0.0004 PEX in, user picks the token to receive -------------
 // SDK-backed (pools + quote from @lifelox/dex-sdk), signed by the in-app wallet.
+// Final safety net: swap.js already throws clean, specific messages for every
+// outcome it controls (on-chain revert, still-pending, etc.) — this just
+// catches anything else (a rejected signature, a generic network blip, or any
+// other raw provider/ethers text) and makes sure the user never sees internal
+// jargon like "missing revert data" or a raw JSON-RPC error.
+function swapErrorMessage(e) {
+  const raw = String(e?.shortMessage || e?.reason || e?.message || "");
+  if (e?.pending) return raw; // swap.js's own "still confirming" message
+  if (e?.reverted) return raw; // swap.js's own clean revert message
+  if (/user rejected|user denied|ACTION_REJECTED/i.test(raw)) return "Swap cancelled.";
+  if (/insufficient funds/i.test(raw)) return "Not enough PEX to cover the swap + gas.";
+  if (/missing revert data|could not decode|CALL_EXCEPTION/i.test(raw)) {
+    return "Swap didn't go through — the price likely moved. Try again.";
+  }
+  if (/network|timeout|fetch/i.test(raw)) return "Network hiccup — try again.";
+  return raw || "Swap failed. Try again.";
+}
+
 function SwapCard() {
   const { signer, refreshBalance } = useWallet();
   const { config, profile, refreshProfile } = useAuth();
@@ -213,19 +231,43 @@ function SwapCard() {
     setBusy(true);
     setMsg(null);
     try {
+      // Re-quote from FRESH reserves right before sending — the on-screen
+      // quote can be a minute or more old (it's only recomputed when the
+      // token picker changes), and that staleness — not the RPC — was the
+      // usual reason a swap genuinely reverted on-chain. Falls back to the
+      // already-shown quote if the refresh itself fails for any reason.
+      setStep("Getting a fresh quote…");
+      let fresh = q;
+      try {
+        const freshPools = await loadPools();
+        const requoted = swapQuote(freshPools, NATIVE_PEX, tokenOut, amount);
+        if (requoted) fresh = requoted;
+      } catch (e) {
+        /* keep the on-screen quote — executeSwap's own pre-flight simulation still guards it */
+      }
       const receipt = await executeSwap(signer, {
         tokenIn: NATIVE_PEX,
         tokenOut,
         amountInHuman: amount,
-        minOutRaw: q.minOutRaw,
-        pool: q.pool,
+        minOutRaw: fresh.minOutRaw,
+        pool: fresh.pool,
         onStep: setStep,
       });
       setPendingHash(receipt.hash);
       setTimeout(() => refreshBalance(), 1500);
       await awardSwap(receipt.hash);
     } catch (e) {
-      setMsg({ ok: false, text: e?.shortMessage || e?.reason || e?.message || "Swap failed." });
+      if (e?.pending && e?.txHash) {
+        // Broadcast succeeded, just hasn't confirmed within our wait window —
+        // this is NOT a failure. Reuse the same pending/"Get points" retry
+        // flow as a slow point-award, instead of scaring the user with an
+        // error for a swap that's still very likely to land.
+        setPendingHash(e.txHash);
+        setTimeout(() => refreshBalance(), 4000);
+        setMsg({ ok: true, text: "Still confirming on-chain — tap \"Get points\" in a moment." });
+      } else {
+        setMsg({ ok: false, text: swapErrorMessage(e) });
+      }
     } finally {
       setBusy(false);
       setStep("");

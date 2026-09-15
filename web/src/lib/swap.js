@@ -184,6 +184,49 @@ async function sendTx(signer, req, gasLimit) {
   }
 }
 
+// Wait for a mined receipt WITHOUT ever calling ethers' tx.wait(). On a
+// revert, tx.wait() tries an extra eth_call replay to decode a human reason,
+// and on this RPC that replay itself comes back empty — surfacing as the
+// exact "missing revert data" error users were hitting, even though the real
+// outcome (mined + status) was already known. Polling getTransactionReceipt
+// directly never triggers that replay, so this class of error is now
+// structurally impossible: every outcome is either a real success, a real
+// on-chain revert (reported plainly), or "still pending" (never a crash).
+async function waitForReceipt(provider, hash, { tries = 40, intervalMs = 3000 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    let receipt = null;
+    try {
+      receipt = await provider.getTransactionReceipt(hash);
+    } catch (e) {
+      /* transient RPC hiccup on the read itself — just retry below */
+    }
+    if (receipt) return receipt;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return null; // still pending after the timeout — not a failure
+}
+
+// Broadcast + wait for a receipt, throwing a clear, specific error on a real
+// on-chain revert or timeout — never a raw ethers/RPC message.
+async function sendAndConfirm(signer, req, gasLimit, failMessage) {
+  const provider = signer.provider;
+  const tx = await sendTx(signer, req, gasLimit);
+  const receipt = await waitForReceipt(provider, tx.hash);
+  if (!receipt) {
+    const err = new Error("Still confirming on-chain — check the explorer in a moment and try again if it doesn't land.");
+    err.txHash = tx.hash;
+    err.pending = true;
+    throw err;
+  }
+  if (receipt.status !== 1) {
+    const err = new Error(failMessage);
+    err.txHash = tx.hash;
+    err.reverted = true;
+    throw err;
+  }
+  return receipt;
+}
+
 // Execute the swap with the in-app signer. `pool` is the PoolInfo from quote().
 export async function executeSwap(signer, { tokenIn, tokenOut, amountInHuman, minOutRaw, pool, onStep }) {
   const to = await signer.getAddress();
@@ -197,19 +240,24 @@ export async function executeSwap(signer, { tokenIn, tokenOut, amountInHuman, mi
     if (!pool?.pair) throw new Error("No pool for this pair yet.");
     onStep?.(`Sending ${tokenIn.symbol} to the pool…`);
     const rt = buildRustTransferTx(BigInt(tokenIn.id), pool.pair, amountIn);
-    const push = await sendTx(signer, { to: rt.to, data: rt.data, value: BigInt(rt.value ?? 0) }, 250000n);
-    await push.wait(1);
+    await sendAndConfirm(
+      signer,
+      { to: rt.to, data: rt.data, value: BigInt(rt.value ?? 0) },
+      250000n,
+      `Sending ${tokenIn.symbol} to the pool failed on-chain. Try again.`,
+    );
   } else if (!isNativeTok(tokenIn)) {
     // Solidity input: approve the router if the allowance is short.
     const erc = new ethers.Contract(tokenIn.address, ERC20_ABI, signer);
     const current = await erc.allowance(to, router);
     if (current < amountIn) {
       onStep?.("Approving…");
-      const ap = await sendTx(signer, {
-        to: tokenIn.address,
-        data: erc.interface.encodeFunctionData("approve", [router, ethers.MaxUint256]),
-      }, 120000n);
-      await ap.wait(1);
+      await sendAndConfirm(
+        signer,
+        { to: tokenIn.address, data: erc.interface.encodeFunctionData("approve", [router, ethers.MaxUint256]) },
+        120000n,
+        "Approval failed on-chain. Try again.",
+      );
     }
   }
 
@@ -229,8 +277,11 @@ export async function executeSwap(signer, { tokenIn, tokenOut, amountInHuman, mi
   const provider = getProvider();
   await callWithRetry(provider, { to: router, data, value, from: to });
 
-  const tx = await sendTx(signer, { to: router, data, value }, 700000n);
-  const receipt = await tx.wait(1);
-  if (!receipt || receipt.status !== 1) throw new Error("Swap transaction failed.");
-  return receipt;
+  onStep?.("Confirming on-chain…");
+  return sendAndConfirm(
+    signer,
+    { to: router, data, value },
+    700000n,
+    "Swap reverted on-chain — the price likely moved past your slippage tolerance. Try again.",
+  );
 }
