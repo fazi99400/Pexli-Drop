@@ -28,8 +28,13 @@ export const SWAP_CONFIG = {
   dualFactory: "0x60a0d287C0d2584b8e585317d1264bF389cB894E",
   dualRouter: "0x596b93967Cc18539795437A17E689e775c2CCE93",
 
-  // Default slippage tolerance (fraction). 0.005 = 0.5%.
-  slippage: 0.005,
+  // Default slippage tolerance (fraction). Kept generous — the swap amount is
+  // a tiny fixed reward-quest amount, not a real trade, so protecting the
+  // exact output rate matters far less than the transaction actually landing
+  // on a slow testnet where a few seconds of price drift is common. A tight
+  // tolerance here was the main source of genuine on-chain reverts.
+  // 0.02 = 2%.
+  slippage: 0.02,
 
   // The swap always spends this fixed amount of native PEX; the user only picks
   // which token to receive. (Set to "" to allow a free-form amount instead.)
