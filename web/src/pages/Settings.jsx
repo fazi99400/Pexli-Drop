@@ -6,6 +6,7 @@ import { WalletManager, WalletOnboard } from "../components/InAppWallet";
 import { useWallet } from "../context/WalletContext";
 import { api, errMessage } from "../lib/functions";
 import Icon from "../components/Icon";
+import { canInstall, onInstallChange, promptInstall, isStandalone, isIOS } from "../lib/pwa";
 
 // Settings — manage the in-app wallet + socials here (kept off the dashboard).
 export default function Settings() {
@@ -17,6 +18,7 @@ export default function Settings() {
         <h2 className="section-title">Settings</h2>
       </div>
       <div className="stack">
+        <InstallAppCard />
         <DisplayNameCard current={profile?.displayName || ""} onSaved={refreshProfile} />
         {unlocked ? <WalletManager /> : <WalletOnboard onReady={refreshProfile} />}
         <AccountLinks profile={profile} onSaved={refreshProfile} />
@@ -39,6 +41,55 @@ export default function Settings() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// "Install app" card — installs Pexli as a home-screen app (PWA). Uses the
+// native install prompt where available; gives iOS users the manual steps.
+function InstallAppCard() {
+  const [installable, setInstallable] = useState(canInstall());
+  const [done, setDone] = useState(false);
+  useEffect(() => onInstallChange(setInstallable), []);
+
+  if (isStandalone()) return null; // already running as an installed app
+
+  async function install() {
+    const ok = await promptInstall();
+    if (ok) setDone(true);
+  }
+
+  return (
+    <div className="panel install-card">
+      <div className="install-ic">
+        <img src="/icon-192.png" alt="Pexli app" width={44} height={44} />
+      </div>
+      <div style={{ flex: 1, minWidth: 180 }}>
+        <h3 className="card-title" style={{ marginBottom: 4 }}>
+          Install the Pexli app
+        </h3>
+        {done ? (
+          <p className="task-desc">Installed! Look for the Pexli icon on your home screen.</p>
+        ) : installable ? (
+          <p className="task-desc">
+            Add Pexli to your home screen for a full-screen, app-like experience.
+          </p>
+        ) : isIOS() ? (
+          <p className="task-desc">
+            On iPhone/iPad: tap the <b>Share</b> button in Safari, then{" "}
+            <b>“Add to Home Screen.”</b>
+          </p>
+        ) : (
+          <p className="task-desc">
+            Open your browser menu and choose <b>“Install app”</b> / <b>“Add to Home screen.”</b>
+          </p>
+        )}
+      </div>
+      {installable && !done && (
+        <button className="btn btn-primary btn-sm" onClick={install}>
+          <Icon name="download" size={15} /> Install
+        </button>
+      )}
     </div>
   );
 }

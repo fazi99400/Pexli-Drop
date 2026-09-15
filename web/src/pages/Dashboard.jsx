@@ -60,7 +60,9 @@ export default function Dashboard() {
 
       {R.enabled && <ReferralCard profile={profile} percent={R.percent} />}
 
-      <Leaderboard />
+      <div className="dash-lb">
+        <Leaderboard />
+      </div>
 
       <SectionHead title="Your Pexli wallet" />
       <div className="panel wallet-hub">

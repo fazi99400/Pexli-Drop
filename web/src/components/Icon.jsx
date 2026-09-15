@@ -20,6 +20,19 @@ const P = {
     </>
   ),
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
+  home: (
+    <>
+      <path d="M3 11.5 12 4l9 7.5" />
+      <path d="M5 10v9h5v-5h4v5h5v-9" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3v12" />
+      <path d="M7 11l5 5 5-5" />
+      <path d="M4 20h16" />
+    </>
+  ),
   send: (
     <>
       <path d="M22 2 11 13" />

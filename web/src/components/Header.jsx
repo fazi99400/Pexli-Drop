@@ -68,22 +68,22 @@ export default function Header() {
             </button>
           )}
           {user && (
-            <button className="btn btn-sm btn-ghost" onClick={() => navigate("/wallet")} title="Wallet">
+            <button className="btn btn-sm btn-ghost nav-desktop" onClick={() => navigate("/wallet")} title="Wallet">
               <Icon name="wallet" size={16} /> <span className="hide-sm">Wallet</span>
             </button>
           )}
           {user && (
-            <button className="btn btn-sm btn-ghost" onClick={() => navigate("/referrals")} title="Referrals">
+            <button className="btn btn-sm btn-ghost nav-desktop" onClick={() => navigate("/referrals")} title="Referrals">
               <Icon name="users" size={16} /> <span className="hide-sm">Referrals</span>
             </button>
           )}
           {user && (
-            <button className="btn btn-sm btn-ghost" onClick={() => navigate("/settings")} title="Settings">
+            <button className="btn btn-sm btn-ghost nav-desktop" onClick={() => navigate("/settings")} title="Settings">
               <Icon name="gear" size={16} /> <span className="hide-sm">Settings</span>
             </button>
           )}
           {user ? (
-            <button className="btn btn-sm" onClick={logout} title="Sign out">
+            <button className="btn btn-sm nav-desktop" onClick={logout} title="Sign out">
               <Icon name="logout" size={16} /> <span className="hide-sm">Sign out</span>
             </button>
           ) : (
