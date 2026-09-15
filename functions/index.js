@@ -16,27 +16,44 @@
 // All point writes flow through src/points.js in a transaction. The client
 // never writes points — see firestore.rules.
 
-// Keep the whole deployment within a new project's default Cloud Run CPU quota:
-// ~28 functions each become a Cloud Run service, so cap max instances and memory
-// so the total reserved CPU stays small. Raise these (and/or request a quota
-// bump) once the airdrop grows. Must run BEFORE the function modules are loaded.
+// Keep the whole deployment within the project's Cloud Run CPU quota: ~40
+// functions each become a Cloud Run service, so cap max instances/CPU so the
+// total reserved CPU stays sane. Sized for ~1,200–3,000 daily users (2026-09
+// capacity pass) — see the maxInstances note below before raising further.
 const { setGlobalOptions } = require("firebase-functions/v2");
 // A new GCP project ships with a SMALL Cloud Run CPU quota per region, and each
 // function is its own Cloud Run service. The deploy-time quota check is roughly
-// sum(maxInstances * cpu) across services, so with ~24 services at cpu:1 we blew
-// past it and most functions failed to update.
+// sum(maxInstances * cpu) across services — Cloud Functions v2's own default
+// (maxInstances:100) blows past a small quota immediately, which is why every
+// function here sets an explicit, deliberately small ceiling instead.
 //
-// Fix: default every function to a FRACTIONAL cpu (0.5) so the whole set fits.
-// Fractional CPU requires concurrency:1, which is fine for the fast Firestore
-// handlers (each finishes in well under a second). The two SLOW functions that
-// hold a request open for many seconds — claimFaucet (sends PEX + waits) and
-// verifyTxHash (polls for a receipt) — override this with cpu:1/concurrency:80
-// so they never serialize. Raise all of this once the CPU quota is bumped.
+// Every function defaults to a FRACTIONAL cpu (0.5), which Cloud Run requires
+// pairing with concurrency:1 — fine for the fast Firestore handlers (each
+// finishes in well under a second; extra traffic is handled by spinning up
+// MORE instances, not more concurrency per instance). maxInstances:4 means up
+// to 4 of these can run at once per function — comfortably above the realistic
+// peak concurrent load at a few thousand daily users, since real traffic is
+// spread across a day, not one instant.
+//
+// The two SLOW functions that hold a request open for several seconds —
+// claimFaucet (sends PEX + waits) and verifyTxHash (polls for a receipt) —
+// override this with cpu:1/concurrency:80/maxInstances:6 (set per-function,
+// see src/tasks/faucet.js and src/tasks/verify.js) so they never serialize:
+// 6 instances × 80 concurrent requests = 480 concurrent faucet/swap calls.
+//
+// Total reserved-CPU footprint at these settings: ~40×4×0.5 + 2×6×1 ≈ 92 vCPU
+// — a large step up from the ~20 used to just barely fit the original tiny
+// default quota, but nowhere near the ~2,400 the unmodified Cloud Functions
+// defaults would have reserved. If a future deploy fails on CPU quota, dial
+// maxInstances back down here first; if you need to go well past this, request
+// a Cloud Run CPU quota increase in Google Cloud Console (IAM & Admin →
+// Quotas, filter "Total allowable CPU", region us-central1) — that's the one
+// step that needs a human in the Cloud Console, not something deployable.
 setGlobalOptions({
   region: "us-central1",
   memory: "256MiB",
   cpu: 0.5,
-  maxInstances: 1,
+  maxInstances: 4,
   concurrency: 1,
 });
 
