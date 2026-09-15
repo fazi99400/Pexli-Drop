@@ -38,6 +38,7 @@ export const api = {
   grantAdmin: call("grantAdmin"),
   adjustPoints: call("adjustPoints"),
   adminStats: call("adminStats"),
+  runLeaderboardRewards: call("runLeaderboardRewards"),
 };
 
 // Turn a Firebase callable error into a friendly message.
