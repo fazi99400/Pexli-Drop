@@ -13,6 +13,7 @@ const { db, FieldValue, Timestamp } = require("./init");
 const { sha256 } = require("./util");
 const { getConfig } = require("./config");
 const { HttpsError } = require("firebase-functions/v2/https");
+const { requireNotBlocked } = require("./callable");
 
 function ledgerId(taskType, refId) {
   return sha256(`${taskType}:${refId}`);
@@ -82,6 +83,7 @@ async function awardPoints({ uid, taskType, points, refId, userUpdates = {}, sta
       throw new HttpsError("failed-precondition", "User profile not found.");
     }
     const userData = userSnap.data();
+    requireNotBlocked(userData); // blocked accounts earn nothing, app-wide
 
     tx.set(ledgerRef, {
       uid,

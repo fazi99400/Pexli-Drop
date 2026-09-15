@@ -14,7 +14,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { ethers } = require("ethers");
 const { db, Timestamp } = require("../init");
-const { CALL_OPTS, requireAuth, requireTaskEnabled } = require("../callable");
+const { CALL_OPTS, requireAuth, requireTaskEnabled, requireNotBlocked } = require("../callable");
 const { awardPoints } = require("../points");
 const chain = require("../chain");
 const params = require("../params");
@@ -63,6 +63,7 @@ const claimFaucet = onCall({ ...CALL_OPTS, cpu: 1, concurrency: 80 }, async (req
     const snap = await tx.get(userRef);
     if (!snap.exists) throw new HttpsError("failed-precondition", "Complete sign-in first.");
     const u = snap.data();
+    requireNotBlocked(u); // blocked accounts can't drain the faucet either
     if (!u.walletAddress) {
       throw new HttpsError("failed-precondition", "Set up your Pexli wallet first.");
     }

@@ -101,6 +101,9 @@ exports.adjustPoints = admin.adjustPoints;
 exports.adminStats = admin.adminStats;
 exports.seedBotUsers = admin.seedBotUsers;
 exports.removeBotUsers = admin.removeBotUsers;
+exports.blockUser = admin.blockUser;
+exports.unblockUser = admin.unblockUser;
+exports.setForceActivated = admin.setForceActivated;
 
 // Leaderboard
 exports.getLeaderboard = leaderboard.getLeaderboard;

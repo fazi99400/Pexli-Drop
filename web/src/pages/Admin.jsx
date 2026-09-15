@@ -737,7 +737,9 @@ function UsersTab() {
               <th>Email</th>
               <th>Wallet</th>
               <th>Points</th>
+              <th>Status</th>
               <th>Adjust points</th>
+              <th>Moderate</th>
             </tr>
           </thead>
           <tbody>
@@ -756,6 +758,11 @@ function UserRow({ u, onChanged }) {
   const [delta, setDelta] = useState("");
   const [pts, setPts] = useState(u.points);
   const [busy, setBusy] = useState(false);
+  const [showBlock, setShowBlock] = useState(false);
+  const [hours, setHours] = useState(24);
+  const [permanent, setPermanent] = useState(false);
+  const [reason, setReason] = useState("");
+
   async function apply(sign) {
     const n = Math.abs(parseInt(delta, 10) || 0) * sign;
     if (!n) return;
@@ -771,32 +778,143 @@ function UserRow({ u, onChanged }) {
       setBusy(false);
     }
   }
+
+  async function doBlock() {
+    setBusy(true);
+    try {
+      await api.blockUser({ uid: u.uid, permanent, durationHours: Number(hours) || 24, reason });
+      setShowBlock(false);
+      onChanged?.();
+    } catch (e) {
+      alert(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function doUnblock() {
+    setBusy(true);
+    try {
+      await api.unblockUser({ uid: u.uid });
+      onChanged?.();
+    } catch (e) {
+      alert(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function toggleForceActivate() {
+    setBusy(true);
+    try {
+      await api.setForceActivated({ uid: u.uid, value: !u.forceActivated });
+      onChanged?.();
+    } catch (e) {
+      alert(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const isBlockedNow = u.blocked && (!u.blockedUntil || u.blockedUntil > Date.now());
+
   return (
-    <tr>
-      <td>{u.xHandle || "—"}</td>
-      <td>{u.email || "—"}</td>
-      <td className="mono">{u.walletAddress || "—"}</td>
-      <td>
-        <b>{pts}</b>
-      </td>
-      <td>
-        <div className="row" style={{ flexWrap: "nowrap" }}>
-          <input
-            className="task-input num"
-            type="number"
-            value={delta}
-            placeholder="0"
-            onChange={(e) => setDelta(e.target.value)}
-          />
-          <button className="btn btn-sm" disabled={busy || !delta} onClick={() => apply(1)}>
-            +
-          </button>
-          <button className="btn btn-sm btn-danger" disabled={busy || !delta} onClick={() => apply(-1)}>
-            −
-          </button>
-        </div>
-      </td>
-    </tr>
+    <>
+      <tr>
+        <td>{u.xHandle || "—"}</td>
+        <td>{u.email || "—"}</td>
+        <td className="mono">{u.walletAddress || "—"}</td>
+        <td>
+          <b>{pts}</b>
+        </td>
+        <td>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {isBlockedNow && (
+              <span className="badge off" title={u.blockReason || ""}>
+                Blocked{u.blockedUntil ? ` till ${new Date(u.blockedUntil).toLocaleDateString()}` : " (permanent)"}
+              </span>
+            )}
+            {u.forceActivated && <span className="badge on">Force-active</span>}
+            {!u.googleLinked && <span className="badge pending">No Google</span>}
+            {!u.xHandleSet && <span className="badge pending">No X</span>}
+            {!isBlockedNow && !u.forceActivated && u.googleLinked && u.xHandleSet && (
+              <span className="subtle">—</span>
+            )}
+          </div>
+        </td>
+        <td>
+          <div className="row" style={{ flexWrap: "nowrap" }}>
+            <input
+              className="task-input num"
+              type="number"
+              value={delta}
+              placeholder="0"
+              onChange={(e) => setDelta(e.target.value)}
+            />
+            <button className="btn btn-sm" disabled={busy || !delta} onClick={() => apply(1)}>
+              +
+            </button>
+            <button className="btn btn-sm btn-danger" disabled={busy || !delta} onClick={() => apply(-1)}>
+              −
+            </button>
+          </div>
+        </td>
+        <td>
+          <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+            {isBlockedNow ? (
+              <button className="btn btn-sm" disabled={busy} onClick={doUnblock}>
+                Unblock
+              </button>
+            ) : (
+              <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => setShowBlock((s) => !s)}>
+                Block
+              </button>
+            )}
+            <button className="btn btn-sm btn-ghost" disabled={busy} onClick={toggleForceActivate}>
+              {u.forceActivated ? "Unforce" : "Force activate"}
+            </button>
+          </div>
+        </td>
+      </tr>
+      {showBlock && (
+        <tr>
+          <td colSpan={7}>
+            <div
+              className="row"
+              style={{ gap: 10, flexWrap: "wrap", background: "var(--bg)", padding: 10, borderRadius: 10 }}
+            >
+              <label className="toggle">
+                <input type="checkbox" checked={permanent} onChange={(e) => setPermanent(e.target.checked)} />
+                <span>Permanent</span>
+              </label>
+              {!permanent && (
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Hours</label>
+                  <input
+                    className="num"
+                    type="number"
+                    min="1"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                  />
+                </div>
+              )}
+              <input
+                className="task-input"
+                style={{ maxWidth: 240 }}
+                placeholder="Reason (optional)"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+              <button className="btn btn-sm btn-danger" disabled={busy} onClick={doBlock}>
+                Confirm block
+              </button>
+              <button className="btn btn-sm btn-ghost" disabled={busy} onClick={() => setShowBlock(false)}>
+                Cancel
+              </button>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 

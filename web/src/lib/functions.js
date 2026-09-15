@@ -41,6 +41,9 @@ export const api = {
   runLeaderboardRewards: call("runLeaderboardRewards"),
   seedBotUsers: call("seedBotUsers"),
   removeBotUsers: call("removeBotUsers"),
+  blockUser: call("blockUser"),
+  unblockUser: call("unblockUser"),
+  setForceActivated: call("setForceActivated"),
 };
 
 // Turn a Firebase callable error into a friendly message.
