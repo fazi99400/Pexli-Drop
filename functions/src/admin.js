@@ -3,7 +3,8 @@
 // user listing, CSV export, and a token-guarded first-admin bootstrap.
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { defineString } = require("firebase-functions/params");
-const { admin, db, FieldValue } = require("./init");
+const { ethers } = require("ethers");
+const { admin, db, FieldValue, Timestamp } = require("./init");
 const { CALL_OPTS, requireAdmin } = require("./callable");
 const { CONFIG_REF, DEFAULT_CONFIG, getConfig } = require("./config");
 const { applyReferralInTx } = require("./points");
@@ -184,20 +185,25 @@ const listUsers = onCall(CALL_OPTS, async (request) => {
     for (const s of [byHandle, byEmail, byWallet]) {
       s.docs.forEach((d) => seen.set(d.id, d));
     }
-    docs = [...seen.values()];
+    docs = [...seen.values()].filter((d) => !d.data().isBot);
   } else {
-    const snap = await db.collection("users").orderBy("points", "desc").limit(limit).get();
-    docs = snap.docs;
+    // Firestore can't filter out isBot in the query (missing-field docs would
+    // be dropped by a != filter), so over-fetch a bit and filter in memory —
+    // bot filler rows never belong in the admin's real-user management view.
+    const snap = await db.collection("users").orderBy("points", "desc").limit(limit + BOT_COUNT).get();
+    docs = snap.docs.filter((d) => !d.data().isBot).slice(0, limit);
   }
   return docs.map((d) => publicRow(d.id, d.data()));
 });
 
-// CSV export for the eventual mainnet distribution. Returns the CSV as text.
+// CSV export for the eventual mainnet distribution. Bots are never real
+// recipients, so they must never appear in a distribution file.
 const exportUsersCsv = onCall(CALL_OPTS, async (request) => {
   requireAdmin(request);
   const snap = await db.collection("users").orderBy("points", "desc").limit(50000).get();
   const header = "uid,handle,email,wallet,points,providers,createdAt";
-  const rows = snap.docs.map((d) => {
+  const realDocs = snap.docs.filter((d) => !d.data().isBot);
+  const rows = realDocs.map((d) => {
     const u = d.data();
     return [
       d.id,
@@ -209,7 +215,7 @@ const exportUsersCsv = onCall(CALL_OPTS, async (request) => {
       u.createdAt ? new Date(tsToMs(u.createdAt)).toISOString() : "",
     ].join(",");
   });
-  return { csv: [header, ...rows].join("\n"), count: snap.size };
+  return { csv: [header, ...rows].join("\n"), count: realDocs.length };
 });
 
 // Manually adjust a user's points (e.g. cut points from a fake follow after a
@@ -281,9 +287,11 @@ const adminStats = onCall(CALL_OPTS, async (request) => {
   const curMonth = monthKey(now);
 
   // --- 1. Users scan (one pass → many metrics) ------------------------------
+  // Bot filler accounts (isBot: true) are leaderboard decoration only — they're
+  // excluded here so the dashboard reflects real users.
   const usersSnap = await db.collection("users").limit(50000).get();
   const users = {
-    total: usersSnap.size,
+    total: 0,
     activated: 0, // has a wallet
     google: 0,
     twitter: 0,
@@ -295,6 +303,8 @@ const adminStats = onCall(CALL_OPTS, async (request) => {
   const signupsByDay = {};
   for (const doc of usersSnap.docs) {
     const u = doc.data();
+    if (u.isBot) continue;
+    users.total += 1;
     users.totalPoints += u.points || 0;
     users.referralPoints += u.referralPointsEarned || 0;
     if (u.walletAddress) users.activated += 1;
@@ -454,6 +464,123 @@ const adminStats = onCall(CALL_OPTS, async (request) => {
   };
 });
 
+// --- Bot accounts (leaderboard filler) --------------------------------------
+// Synthetic Firestore-only "users" — no real Firebase Auth account, so they
+// can never sign in, hold real funds, or claim the faucet. They exist purely
+// so the leaderboard looks populated. Deterministic ids (bot_0001..bot_0100)
+// make seeding idempotent: running it again just refreshes the same 100 rows
+// instead of piling up more. Every bot is tagged { isBot: true } so it's easy
+// to find and remove later, and is excluded from admin dashboard user counts.
+const BOT_COUNT = 100;
+const BOT_ID = (i) => `bot_${String(i).padStart(4, "0")}`;
+
+const FIRST_NAMES = [
+  "Ali", "Ahmed", "Hassan", "Hussain", "Bilal", "Usman", "Zeeshan", "Faisal",
+  "Imran", "Kashif", "Salman", "Waqas", "Fahad", "Adeel", "Asad", "Danish",
+  "Hamza", "Junaid", "Kamran", "Nabeel", "Omar", "Rashid", "Saad", "Tariq",
+  "Yasir", "Zain", "Sana", "Ayesha", "Fatima", "Hira", "Iqra", "Javeria",
+  "Komal", "Laiba", "Maria", "Nida", "Rabia", "Sana", "Tahira", "Zara",
+  "John", "Michael", "David", "James", "Robert", "William", "Daniel", "Chris",
+  "Matthew", "Andrew", "Joshua", "Ryan", "Kevin", "Brian", "Jason", "Justin",
+  "Sarah", "Emily", "Jessica", "Ashley", "Amanda", "Melissa", "Michelle",
+  "Wei", "Jun", "Hiroshi", "Yuki", "Min-jun", "Seo-yeon", "Raj", "Priya",
+  "Arjun", "Ananya", "Diego", "Carlos", "Miguel", "Sofia", "Valentina",
+  "Luca", "Marco", "Giulia", "Elena", "Ivan", "Olga", "Dmitri", "Anna",
+];
+const LAST_NAMES = [
+  "Khan", "Ahmed", "Malik", "Butt", "Sheikh", "Raza", "Iqbal", "Hussain",
+  "Chaudhry", "Qureshi", "Baig", "Farooq", "Abbasi", "Awan", "Chughtai",
+  "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller",
+  "Davis", "Rodriguez", "Martinez", "Wilson", "Anderson", "Taylor", "Thomas",
+  "Lee", "Kim", "Park", "Chen", "Wang", "Liu", "Zhang", "Tanaka", "Sato",
+  "Singh", "Patel", "Kumar", "Sharma", "Gupta", "Reddy", "Nair",
+  "Rossi", "Ferrari", "Bianchi", "Muller", "Schmidt", "Novak", "Popov",
+];
+
+function randPick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Skews toward a small number of "whale" bots and a longer tail of casual
+// ones, so the leaderboard looks like a real distribution rather than flat.
+function randomBotPoints() {
+  const r = Math.random();
+  if (r < 0.08) return 1500 + Math.floor(Math.random() * 3500); // whales
+  if (r < 0.35) return 300 + Math.floor(Math.random() * 1200); // active
+  return 10 + Math.floor(Math.random() * 300); // casual
+}
+
+// Create 100 bot users with a random (but human-looking) name, random points,
+// and a real, freshly generated, unique wallet address (the private key is
+// immediately discarded — the address is display-only and never funded).
+const seedBotUsers = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const batch = db.batch();
+  const usedNames = new Set();
+  let created = 0;
+
+  for (let i = 1; i <= BOT_COUNT; i++) {
+    let name;
+    do {
+      name = `${randPick(FIRST_NAMES)} ${randPick(LAST_NAMES)}`;
+    } while (usedNames.has(name));
+    usedNames.add(name);
+
+    const wallet = ethers.Wallet.createRandom();
+    const address = wallet.address; // EIP-55 checksummed, same shape as a real user's
+
+    const uid = BOT_ID(i);
+    batch.set(
+      db.collection("users").doc(uid),
+      {
+        isBot: true,
+        displayName: name,
+        email: "",
+        authProviders: [],
+        xUserId: null,
+        xHandle: null,
+        igHandle: null,
+        walletAddress: address,
+        points: randomBotPoints(),
+        createdAt: Timestamp.now(),
+        lastFaucetAt: null,
+        lastSwapAt: null,
+        lastTxAt: null,
+        lastTweetTaskAt: null,
+        referralCode: null,
+        referredBy: null,
+        referralCount: 0,
+        referralPointsEarned: 0,
+      },
+      { merge: false }, // fully reset the row each time seeding runs
+    );
+    batch.set(db.collection("walletIndex").doc(address.toLowerCase()), {
+      uid,
+      at: FieldValue.serverTimestamp(),
+      isBot: true,
+    });
+    created++;
+  }
+
+  await batch.commit();
+  return { ok: true, created };
+});
+
+// Remove every bot account (and its wallet-index entries) in one call.
+const removeBotUsers = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const snap = await db.collection("users").where("isBot", "==", true).limit(500).get();
+  if (snap.empty) return { ok: true, removed: 0 };
+  const batch = db.batch();
+  for (const doc of snap.docs) {
+    const addr = doc.data().walletAddress;
+    if (addr) batch.delete(db.collection("walletIndex").doc(String(addr).toLowerCase()));
+    batch.delete(doc.ref);
+  }
+  await batch.commit();
+  return { ok: true, removed: snap.size };
+});
+
 // --- Admin bootstrap --------------------------------------------------------
 // Grant the admin claim to another user (requires an existing admin).
 const grantAdmin = onCall(CALL_OPTS, async (request) => {
@@ -525,4 +652,6 @@ module.exports = {
   bootstrapAdmin,
   adjustPoints,
   adminStats,
+  seedBotUsers,
+  removeBotUsers,
 };
