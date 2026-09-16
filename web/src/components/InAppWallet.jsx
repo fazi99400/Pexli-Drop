@@ -231,6 +231,13 @@ function UnlockForm({ onReady }) {
       const signer = await unlockWallet(pw);
       adopt(signer);
       setPw("");
+      // Self-heal: the very first sync (at creation/import time) can fail
+      // silently — a network blip, a cold function — and until now nothing
+      // ever retried it, leaving the wallet unlocked locally forever while
+      // the server never learned the address (faucet/swap/send all then
+      // fail with "set up your wallet" despite it clearly existing). Retry
+      // it on every unlock, best-effort — never blocks getting into the wallet.
+      syncAddress(signer.address).catch(() => {});
       onReady?.(signer.address);
     } catch (e) {
       setErr(e?.message || "Wrong password.");
