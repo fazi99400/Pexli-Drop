@@ -11,7 +11,24 @@ import Icon from "../components/Icon";
 
 // The wallet hub: unlock/create, manage, faucet, swap, send — all in-app.
 export default function Wallet() {
-  const { unlocked } = useWallet();
+  const { unlocked, address } = useWallet();
+  const { profile, refreshProfile } = useAuth();
+
+  // Self-heal: if the wallet is unlocked locally but the server's profile
+  // doesn't have this address (the initial sync at creation time can fail
+  // silently on a network blip, and nothing used to retry it), quietly
+  // re-sync it every time this page is open with the wallet unlocked —
+  // so an account stuck on "Set up your wallet first" despite a wallet
+  // that clearly exists recovers just by opening this page, no re-entry
+  // of the password needed.
+  useEffect(() => {
+    if (!unlocked || !address) return;
+    if (profile?.walletAddress && profile.walletAddress.toLowerCase() === address.toLowerCase()) return;
+    api
+      .setWallet({ walletAddress: address })
+      .then(() => refreshProfile())
+      .catch(() => {});
+  }, [unlocked, address, profile?.walletAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto" }}>
@@ -22,7 +39,7 @@ export default function Wallet() {
       </div>
 
       {!unlocked ? (
-        <WalletOnboard />
+        <WalletOnboard onReady={refreshProfile} />
       ) : (
         <div className="stack">
           <WalletManager />
