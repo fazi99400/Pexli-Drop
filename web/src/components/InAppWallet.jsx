@@ -7,6 +7,7 @@ import {
   importFromPrivateKey,
   unlockWallet,
   exportSecret,
+  changeWalletPassword,
   removeWallet,
   explorerTxUrl,
 } from "../lib/localWallet";
@@ -219,10 +220,22 @@ function ImportForm({ onReady, adopt }) {
 }
 
 function UnlockForm({ onReady }) {
-  const { adopt, address } = useWallet();
+  const { adopt, address, setExists, setAddress } = useWallet();
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [confirmForgot, setConfirmForgot] = useState(false);
+
+  // There is no password reset for a properly encrypted, non-custodial
+  // wallet — that's the whole point. The only way back in without the
+  // password is the recovery phrase, so this just clears the local, now-
+  // inaccessible keystore and drops the user into Import (see WalletOnboard:
+  // exists becomes false, so CreateOrImport renders instead of this form).
+  function forgotPassword() {
+    removeWallet();
+    setExists(false);
+    setAddress(null);
+  }
 
   async function unlock() {
     setBusy(true);
@@ -263,6 +276,87 @@ function UnlockForm({ onReady }) {
         {err && <p className="msg err">{err}</p>}
         <button className="btn btn-primary" onClick={unlock} disabled={busy || !pw}>
           {busy ? "Unlocking…" : "Unlock"}
+        </button>
+        {!confirmForgot ? (
+          <button className="btn btn-sm btn-ghost" onClick={() => setConfirmForgot(true)}>
+            Forgot password?
+          </button>
+        ) : (
+          <div className="wl-warn">
+            <Icon name="shield" size={16} />
+            <div>
+              <p style={{ margin: 0 }}>
+                There's no password reset — only your 12-word recovery phrase gets you back in. If
+                you saved it, remove this wallet from the device and re-import with your phrase.
+                If you didn't save it, this wallet is unrecoverable.
+              </p>
+              <div className="row mt">
+                <button className="btn btn-sm btn-danger" onClick={forgotPassword}>
+                  Remove from device &amp; re-import
+                </button>
+                <button className="btn btn-sm btn-ghost" onClick={() => setConfirmForgot(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Change the wallet's encryption password — needs the current password (a
+// re-encrypt, never a blind reset). Lives inside WalletManager.
+function ChangePasswordSection() {
+  const [open, setOpen] = useState(false);
+  const [oldPw, setOldPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [newPw2, setNewPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function change() {
+    const problem = passwordProblem(newPw, newPw2);
+    if (problem) return setMsg({ ok: false, text: problem });
+    setBusy(true);
+    setMsg(null);
+    try {
+      await changeWalletPassword(oldPw, newPw);
+      setMsg({ ok: true, text: "Password changed." });
+      setOldPw("");
+      setNewPw("");
+      setNewPw2("");
+      setTimeout(() => setOpen(false), 1200);
+    } catch (e) {
+      setMsg({ ok: false, text: e?.message || "Could not change password." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button className="btn btn-sm btn-ghost" onClick={() => setOpen(true)}>
+        <Icon name="edit" size={14} /> Change password
+      </button>
+    );
+  }
+  return (
+    <div className="stack">
+      <Field label="Current password" type="password" value={oldPw} placeholder="current password"
+        onChange={(e) => setOldPw(e.target.value)} autoComplete="current-password" />
+      <Field label="New password" type="password" value={newPw} placeholder="at least 8 characters"
+        onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
+      <Field label="Confirm new password" type="password" value={newPw2} placeholder="repeat new password"
+        onChange={(e) => setNewPw2(e.target.value)} autoComplete="new-password" />
+      {msg && <p className={`msg ${msg.ok ? "ok" : "err"}`}>{msg.text}</p>}
+      <div className="row">
+        <button className="btn btn-sm btn-primary" onClick={change} disabled={busy || !oldPw || !newPw || !newPw2}>
+          {busy ? "Changing…" : "Save new password"}
+        </button>
+        <button className="btn btn-sm btn-ghost" onClick={() => setOpen(false)} disabled={busy}>
+          Cancel
         </button>
       </div>
     </div>
@@ -361,6 +455,9 @@ export function WalletManager() {
           <button className="btn btn-sm btn-ghost" onClick={() => setReveal(null)}>Hide</button>
         </div>
       )}
+
+      <div className="wl-sep" />
+      <ChangePasswordSection />
 
       <div className="wl-sep" />
       <div className="row spread">

@@ -11,8 +11,57 @@
 import { ethers } from "ethers";
 import { PEXLI_CHAIN } from "./chain";
 
-const KEYSTORE_KEY = "pexli_wallet_keystore_v1";
-const ADDRESS_KEY = "pexli_wallet_address_v1";
+// Storage is namespaced per signed-in Firebase account (uid) — see
+// setWalletUser() below — so that logging into a DIFFERENT account on the
+// same device/browser never sees a PREVIOUS account's wallet. Before this,
+// every account shared one fixed key, so switching accounts on one device
+// made account B land straight on account A's (locked) wallet instead of
+// its own "set up a wallet" screen.
+const KEYSTORE_BASE = "pexli_wallet_keystore_v2";
+const ADDRESS_BASE = "pexli_wallet_address_v2";
+// Pre-namespacing keys, kept only so the one-time migration below can find
+// and claim an existing wallet the first time this ships.
+const LEGACY_KEYSTORE_KEY = "pexli_wallet_keystore_v1";
+const LEGACY_ADDRESS_KEY = "pexli_wallet_address_v1";
+
+let _uid = null; // the currently signed-in account; null while signed out
+
+// Call this whenever the signed-in account changes (sign-in, sign-out,
+// switching accounts) — see WalletContext.jsx. Runs a one-time migration:
+// the FIRST account that sees a pre-namespacing wallet claims it (matches
+// prior behaviour for the common single-account-per-device case); the
+// legacy key is then removed so no OTHER account can ever pick it up too.
+export function setWalletUser(uid) {
+  _uid = uid || null;
+  if (_uid) migrateLegacyWallet(_uid);
+}
+function keystoreKeyFor(uid) {
+  return `${KEYSTORE_BASE}:${uid || "anon"}`;
+}
+function addressKeyFor(uid) {
+  return `${ADDRESS_BASE}:${uid || "anon"}`;
+}
+function migrateLegacyWallet(uid) {
+  try {
+    const store = ls();
+    if (!store) return;
+    const legacy = store.getItem(LEGACY_KEYSTORE_KEY);
+    if (!legacy) return; // nothing pre-namespacing to migrate
+    if (!store.getItem(keystoreKeyFor(uid))) {
+      // This account doesn't have its own scoped wallet yet — it claims the
+      // pre-existing one-per-device wallet.
+      store.setItem(keystoreKeyFor(uid), legacy);
+      const legacyAddr = store.getItem(LEGACY_ADDRESS_KEY);
+      if (legacyAddr) store.setItem(addressKeyFor(uid), legacyAddr);
+    }
+    // Consumed either way — remove it so a different account can never also
+    // inherit it later.
+    store.removeItem(LEGACY_KEYSTORE_KEY);
+    store.removeItem(LEGACY_ADDRESS_KEY);
+  } catch (e) {
+    /* storage blocked — nothing to migrate then */
+  }
+}
 
 // --- storage helpers (all guarded — private windows / blocked storage) -------
 function ls() {
@@ -20,14 +69,14 @@ function ls() {
 }
 export function hasWallet() {
   try {
-    return !!ls()?.getItem(KEYSTORE_KEY);
+    return !!ls()?.getItem(keystoreKeyFor(_uid));
   } catch (e) {
     return false;
   }
 }
 export function getStoredAddress() {
   try {
-    return ls()?.getItem(ADDRESS_KEY) || null;
+    return ls()?.getItem(addressKeyFor(_uid)) || null;
   } catch (e) {
     return null;
   }
@@ -35,20 +84,20 @@ export function getStoredAddress() {
 function saveKeystore(json, address) {
   const store = ls();
   if (!store) throw new Error("This browser is blocking local storage, so a wallet can't be saved here.");
-  store.setItem(KEYSTORE_KEY, json);
-  store.setItem(ADDRESS_KEY, address);
+  store.setItem(keystoreKeyFor(_uid), json);
+  store.setItem(addressKeyFor(_uid), address);
 }
 export function removeWallet() {
   try {
-    ls()?.removeItem(KEYSTORE_KEY);
-    ls()?.removeItem(ADDRESS_KEY);
+    ls()?.removeItem(keystoreKeyFor(_uid));
+    ls()?.removeItem(addressKeyFor(_uid));
   } catch (e) {
     /* ignore */
   }
 }
 export function getKeystore() {
   try {
-    return ls()?.getItem(KEYSTORE_KEY) || null;
+    return ls()?.getItem(keystoreKeyFor(_uid)) || null;
   } catch (e) {
     return null;
   }
@@ -219,6 +268,36 @@ export async function exportSecret(password) {
   }
   const wallet = await unlockWallet(password);
   return { address: wallet.address, privateKey: wallet.privateKey, mnemonic: wallet.mnemonic?.phrase || null };
+}
+
+// Change the wallet's password: requires the CURRENT password (the secret is
+// re-encrypted, never reset blind — there is no "forgot password" bypass for
+// a properly encrypted vault; that's what makes it non-custodial). If the
+// password is truly forgotten, the only way back in is re-importing the
+// recovery phrase (see removeWallet + importFromMnemonic).
+export async function changeWalletPassword(oldPassword, newPassword) {
+  const stored = getKeystore();
+  if (!stored) throw new Error("No wallet on this device yet.");
+  let secret;
+  if (isNewVault(stored)) {
+    try {
+      secret = await decryptVault(stored, oldPassword);
+    } catch (e) {
+      throw new Error("Current password is wrong.");
+    }
+  } else {
+    let legacy;
+    try {
+      legacy = await ethers.Wallet.fromEncryptedJson(stored, oldPassword);
+    } catch (e) {
+      throw new Error("Current password is wrong.");
+    }
+    secret = { mnemonic: legacy.mnemonic?.phrase || null, privateKey: legacy.privateKey };
+  }
+  const wallet = walletFromSecret(secret);
+  const vault = await encryptVault(secret, newPassword);
+  saveKeystore(vault, wallet.address);
+  return { address: wallet.address };
 }
 
 // --- chain reads -------------------------------------------------------------
