@@ -193,15 +193,13 @@ export function AuthProvider({ children }) {
   const googleLinked = !!(profile && (profile.authProviders || []).includes("google"));
   const xLinked = !!(profile && profile.xHandle);
 
-  // Account is "active" (can enter the airdrop) once it has a reward wallet AND
-  // BOTH logins linked (Google + X) — one person, one X, one Google. An admin
-  // can waive the two-provider requirement per-account (profile.forceActivated)
-  // for a legitimate single-provider sign-up; a wallet is still required.
-  const isActive = !!(
-    profile &&
-    profile.walletAddress &&
-    (profile.forceActivated || (xLinked && googleLinked))
-  );
+  // Account is "active" (can enter the airdrop) once it has a reward wallet
+  // AND at least one login linked (Google OR X — whichever they signed up
+  // with already counts). Connecting the other provider is optional, not a
+  // gate. Uniqueness is still enforced per-provider (one X, one Google), so
+  // this still keeps "one person, one account" — it just no longer requires
+  // BOTH logins before the account can be used.
+  const isActive = !!(profile && profile.walletAddress && (xLinked || googleLinked || profile.forceActivated));
 
   const value = {
     user,

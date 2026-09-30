@@ -61,7 +61,7 @@ export default function Dashboard() {
       {R.enabled && <ReferralCard profile={profile} percent={R.percent} />}
 
       <div className="dash-lb">
-        <Leaderboard />
+        <Leaderboard limit={3} />
       </div>
 
       <SectionHead title="Your Pexli wallet" />
@@ -86,7 +86,7 @@ export default function Dashboard() {
             {showFollowX && (
               <TaskCard
                 title="Follow @PexliLabs on X"
-                desc="Follow @PexliLabs, then post a tweet tagging @PexliLabs and paste the link. Auto-verified, free."
+                desc="Follow @PexliLabs, then post a tweet tagging @PexliLabs and paste the link. Reviewed before points are credited."
                 points={P.follow_x}
                 icon="x"
                 cat="social"
@@ -115,7 +115,7 @@ export default function Dashboard() {
             {showFollowIG && (
               <TaskCard
                 title="Follow on Instagram"
-                desc="Follow @PexliLab on Instagram, then verify — points are instant."
+                desc="Follow @PexliLab on Instagram, then verify. Reviewed before points are credited."
                 points={P.follow_ig}
                 icon="instagram"
                 cat="social"

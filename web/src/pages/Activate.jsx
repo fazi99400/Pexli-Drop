@@ -43,8 +43,9 @@ export default function Activate() {
       <div className="hero" style={{ padding: "24px 0 18px" }}>
         <h1 style={{ fontSize: "clamp(26px,5vw,40px)" }}>Activate your account</h1>
         <p>
-          Set up your in-app <span className="accent">Pexli</span> wallet and link both logins
-          (Google + X) to join the airdrop. This keeps bots out — one person, one account.
+          Set up your in-app <span className="accent">Pexli</span> wallet to join the airdrop —
+          that's all that's required. Connecting Google and X is optional (and unlocks the X
+          quests below), but you don't need both to get started.
         </p>
       </div>
 
@@ -53,10 +54,10 @@ export default function Activate() {
           <Icon name={hasWallet ? "check" : "wallet"} size={16} /> Pexli wallet
         </span>
         <span className={`chk ${googleLinked ? "done" : ""}`}>
-          <Icon name={googleLinked ? "check" : "users"} size={16} /> Google
+          <Icon name={googleLinked ? "check" : "users"} size={16} /> Google <span className="subtle">(optional)</span>
         </span>
         <span className={`chk ${xLinked ? "done" : ""}`}>
-          <Icon name={xLinked ? "check" : "x"} size={16} /> X account
+          <Icon name={xLinked ? "check" : "x"} size={16} /> X account <span className="subtle">(optional)</span>
         </span>
       </div>
 

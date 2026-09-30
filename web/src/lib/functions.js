@@ -21,6 +21,7 @@ export const api = {
 
   setSocialHandle: call("setSocialHandle"),
   submitFollow: call("submitFollow"),
+  reseedDefaultTweets: call("reseedDefaultTweets"),
   assignTweet: call("assignTweet"),
   verifyTweetPublic: call("verifyTweetPublic"),
   xAuthStart: call("xAuthStart"),

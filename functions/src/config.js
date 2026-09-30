@@ -61,10 +61,6 @@ const DEFAULT_CONFIG = {
   tx: {
     amountPex: "0.0004",
   },
-  // Follow tasks: when true, submitting a follow is auto-credited (no admin
-  // approval). X submissions still require the handle to be a real, existing
-  // public account (checked via a free endpoint). Set false to review manually.
-  autoApproveFollows: true,
   // Daily leaderboard bonus: every 24h, users are ranked by points and awarded
   // by rank tier (owner-defined). Editable in admin.
   leaderboard: {
@@ -95,10 +91,6 @@ async function getConfig() {
     referral: { ...DEFAULT_CONFIG.referral, ...(data.referral || {}) },
     faucet: { ...DEFAULT_CONFIG.faucet, ...(data.faucet || {}) },
     tx: { ...DEFAULT_CONFIG.tx, ...(data.tx || {}) },
-    autoApproveFollows:
-      data.autoApproveFollows === undefined
-        ? DEFAULT_CONFIG.autoApproveFollows
-        : Boolean(data.autoApproveFollows),
     leaderboard: {
       ...DEFAULT_CONFIG.leaderboard,
       ...(data.leaderboard || {}),

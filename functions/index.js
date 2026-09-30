@@ -102,6 +102,7 @@ exports.assignTweet = x.assignTweet; // API-free: picks a random pool tweet
 exports.xAuthStart = x.xAuthStart;
 exports.xLoginStart = x.xLoginStart; // sign in / sign up with X (custom token)
 exports.xCallback = x.xCallback;
+exports.reseedDefaultTweets = x.reseedDefaultTweets;
 
 // Admin
 exports.updateConfig = admin.updateConfig;
