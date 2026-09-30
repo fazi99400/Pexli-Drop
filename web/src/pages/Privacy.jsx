@@ -13,6 +13,34 @@ export default function Privacy() {
         completed. We do <b>not</b> store images or media.
       </p>
 
+      <h3>1a. Ambassador program applicants</h3>
+      <p>
+        If you apply to the <Link to="/ambassador">Ambassador Program</Link>, we also collect:
+        your <b>email</b>, <b>WhatsApp number</b> and <b>Telegram username</b>; your country and
+        languages; the platforms you use and their follower counts; 1 to 3 links to content you
+        made; how many hours a week you can give; and your confirmation that you are 18 or older,
+        that you agree to the Code of Conduct, and that Pexli may contact you.
+      </p>
+      <p>
+        <b>Why:</b> to review your application, to contact you about the program (missions,
+        onboarding, rewards and rule issues) on email, WhatsApp and Telegram, which you consent to
+        when you apply, and to keep the program fair.
+      </p>
+      <p>
+        <b>Who sees it:</b> your contact details are stored separately from everything else and are
+        visible only to Pexli program admins. They are <b>never shown publicly</b> and{" "}
+        <b>never shown to other ambassadors</b>, including Regional Leads and the ambassador who
+        invited you. Ambassadors only see the display name, join date, activation status, task count
+        and points of members who joined with their link: never emails, phone numbers or wallets.
+      </p>
+      <p>
+        <b>Deletion:</b> you can withdraw consent or ask us to delete your ambassador application
+        and contact details at any time by messaging the official Pexli account on X (
+        <a href="https://x.com/PexliLabs" target="_blank" rel="noreferrer">@PexliLabs</a>) or the
+        Pexli team in the ambassador Telegram group. We delete them within 30 days. Deleting them
+        ends your participation in the program.
+      </p>
+
       <h3>2. How we use it</h3>
       <p>
         Your data is used to verify tasks, award points, prevent abuse, show the leaderboard, and to

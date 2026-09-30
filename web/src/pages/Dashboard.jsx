@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, errMessage } from "../lib/functions";
@@ -64,17 +64,35 @@ export default function Dashboard() {
         <Leaderboard limit={3} />
       </div>
 
+      {profile?.referredBy && <YourAmbassador />}
+
       <div className="panel amb-cta mt">
-        <div>
-          <h3 className="card-title"><Icon name="star" /> Become a Pexli Ambassador</h3>
-          <p className="task-desc" style={{ margin: 0 }}>
-            Post about Pexli on X, grow a community of verified members and climb from Rising to
-            Champion for bonus points. Lead and Champion are eligible for a cash reward after funding.
-          </p>
-        </div>
-        <Link className="btn btn-primary btn-sm" to="/ambassador">
-          Learn more &amp; apply
-        </Link>
+        {profile?.ambTier ? (
+          <>
+            <div>
+              <h3 className="card-title"><Icon name="star" /> Your ambassador dashboard</h3>
+              <p className="task-desc" style={{ margin: 0 }}>
+                Missions, your team, your invite links and this month's ambassador leaderboard.
+              </p>
+            </div>
+            <Link className="btn btn-primary btn-sm" to="/ambassador">
+              Open
+            </Link>
+          </>
+        ) : (
+          <>
+            <div>
+              <h3 className="card-title"><Icon name="star" /> Become a Pexli Ambassador</h3>
+              <p className="task-desc" style={{ margin: 0 }}>
+                Post about Pexli on X, grow a community of verified members and climb from Rising to
+                Champion for bonus points. Lead and Champion are eligible for a cash reward after funding.
+              </p>
+            </div>
+            <Link className="btn btn-primary btn-sm" to="/ambassador">
+              Learn more &amp; apply
+            </Link>
+          </>
+        )}
       </div>
 
       <SectionHead title="Your Pexli wallet" />
@@ -408,5 +426,41 @@ function TweetQuest({ points, hasX, onDone }) {
         {msg && <p className={`msg ${msg.ok ? "ok" : "err"}`}>{msg.text}</p>}
       </div>
     </>
+  );
+}
+
+// "Your ambassador: @handle" — shown to members who joined with an approved
+// ambassador's link, with that ambassador's community group if they set one.
+function YourAmbassador() {
+  const [a, setA] = useState(null);
+  useEffect(() => {
+    api
+      .ambassador({ action: "myAmbassador" })
+      .then((r) => setA(r.data?.ambassador || null))
+      .catch(() => setA(null));
+  }, []);
+  if (!a) return null;
+  return (
+    <div className="panel amb-cta mt">
+      <div>
+        <h3 className="card-title">
+          <Icon name="users" /> Your ambassador: @{a.xHandle}
+        </h3>
+        <p className="task-desc" style={{ margin: 0 }}>
+          {a.groupUrl
+            ? "Join their community for help getting started and new quests."
+            : "You joined Pexli Drop with their invite link."}
+        </p>
+      </div>
+      {a.groupUrl ? (
+        <a className="btn btn-primary btn-sm" href={a.groupUrl} target="_blank" rel="noreferrer">
+          Join their community
+        </a>
+      ) : (
+        <a className="btn btn-sm" href={`https://x.com/${a.xHandle}`} target="_blank" rel="noreferrer">
+          View on X
+        </a>
+      )}
+    </div>
   );
 }

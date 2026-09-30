@@ -8,6 +8,14 @@ import Icon from "./Icon";
 // for a compact preview — the home dashboard shows only the top few, with a
 // link to the full ranking; the dedicated /leaderboard page renders this with
 // no limit and shows all 100.
+// Ambassador badge text by tier (row.amb comes from users/{uid}.ambTier).
+const AMB_LABEL = {
+  ambassador: "Ambassador",
+  rising: "Ambassador · Rising",
+  lead: "Ambassador · Lead",
+  champion: "Ambassador · Champion",
+};
+
 export default function Leaderboard({ limit } = {}) {
   const { user, config } = useAuth();
   const [rows, setRows] = useState(null);
@@ -84,7 +92,13 @@ export default function Leaderboard({ limit } = {}) {
                       <span className={rankClass(row.rank)}>{row.rank}</span>
                     </td>
                     <td>
-                      {row.name} {me && <span className="badge on">you</span>}
+                      {row.name}
+                      {row.amb && (
+                        <span className="amb-badge" title="Pexli Ambassador">
+                          {AMB_LABEL[row.amb] || "Ambassador"}
+                        </span>
+                      )}{" "}
+                      {me && <span className="badge on">you</span>}
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 700, color: "var(--accent)" }}>
                       {row.points.toLocaleString()}

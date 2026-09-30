@@ -849,7 +849,40 @@ img, svg, canvas, video { max-width: 100%; }
 .amb-bar { height: 8px; border-radius: 999px; background: var(--bg-elev, var(--bg)); border: 1px solid var(--border); overflow: hidden; }
 .amb-bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .amb-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.amb-h4 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.amb-label { display: block; font-size: 12px; margin: 14px 0 6px; }
+.amb-platforms { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.amb-platform { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+.amb-platform input[type="number"] { width: 100%; }
+.amb-checks { display: grid; gap: 10px; margin: 6px 0 16px; font-size: 14px; }
+.amb-checks input { margin-top: 3px; flex: none; }
+.amb-announce { border-color: var(--accent); }
+.amb-checklist { display: grid; gap: 8px; }
+.amb-check-item { display: flex; align-items: center; gap: 10px; font-size: 14px; flex-wrap: wrap; }
+.amb-check-item .amb-check-label { flex: 1 1 180px; }
+.amb-check-item.done .amb-check-label { color: var(--muted); text-decoration: line-through; }
+.amb-tick { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.amb-check-item.done .amb-tick { background: var(--accent); border-color: var(--accent); color: #fff; }
+.amb-podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.amb-podium-item { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.amb-podium-item.r1 { border-color: var(--accent); }
+.amb-score { font-size: 24px; font-weight: 800; color: var(--accent); }
+.amb-logos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.amb-logo { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border: 1px solid var(--border); border-radius: 10px; text-decoration: none; color: var(--muted); font-size: 12px; text-align: center; }
+.amb-logo img { height: 34px; max-width: 100%; object-fit: contain; }
+.amb-logo.dark { background: #0b1220; }
+.amb-logo.light { background: #ffffff; }
+.amb-samples { display: grid; gap: 10px; }
+.amb-sample { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.amb-sample p { margin: 0; font-size: 14px; }
+.amb-sample .btn { flex: none; }
+.amb-badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; font-weight: 700; margin-left: 6px; background: rgba(59,130,246,.14); color: var(--accent); border: 1px solid rgba(59,130,246,.3); vertical-align: 1px; white-space: nowrap; }
+.amb-admin-card p { overflow-wrap: anywhere; }
+.amb-admin-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 @media (max-width: 640px) {
   .amb-two { grid-template-columns: 1fr; }
   .amb-cta { flex-direction: column; align-items: flex-start; }
+  .amb-podium { grid-template-columns: 1fr; }
+  .amb-sample { flex-direction: column; }
+  .amb-stats { grid-template-columns: repeat(3, 1fr); gap: 6px; }
 }
