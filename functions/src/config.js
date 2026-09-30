@@ -76,10 +76,36 @@ const DEFAULT_CONFIG = {
     weeklyPostCap: 7,
     tiers: { rising: 500, lead: 5000, champion: 10000 },
     tierBonus: { rising: 2000, lead: 20000, champion: 50000 },
+    // Mission/post points are multiplied by the ambassador's tier.
+    tierMultiplier: { ambassador: 1, rising: 1.1, lead: 1.25, champion: 1.5 },
+    // Referral share an ACTIVE approved ambassador earns on their own members'
+    // points (normal users earn referral.percent).
+    ambassadorReferralPercent: 15,
+    // Team share: a sponsor earns this % of the points earned by the members
+    // of the ambassadors they recruited. Two levels, never deeper.
+    teamSharePercent: 3,
+    // One-time sponsor bonuses when a recruited ambassador reaches N verified
+    // members (m1/m2/m3 = member thresholds, bonus = points to the sponsor).
+    sponsorMilestones: { m1: 100, m2: 500, m3: 1000 },
+    sponsorMilestoneBonus: { m1: 1000, m2: 3000, m3: 5000 },
+    // Activity rule: approved submissions needed per calendar month.
+    activityMin: 4,
+    // Monthly ambassador board: score = members gained x this + mission points.
+    boardMemberPoints: 10,
   },
 };
 
 const CONFIG_REF = db.collection("config").doc("global");
+
+// One-level-deep merge: nested objects (tiers, tierBonus, ...) are merged key
+// by key so a partially saved section still has every default.
+function mergeNested(defaults, saved) {
+  const out = { ...defaults, ...saved };
+  for (const [k, v] of Object.entries(defaults)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = { ...v, ...(saved[k] || {}) };
+  }
+  return out;
+}
 
 // Read config, seeding defaults if the doc is missing. Shallow-merges so a
 // newly added task/point key always has a default even on old configs.
@@ -109,15 +135,7 @@ async function getConfig() {
         ...((data.leaderboard || {}).rewards || {}),
       },
     },
-    ambassador: {
-      ...DEFAULT_CONFIG.ambassador,
-      ...(data.ambassador || {}),
-      tiers: { ...DEFAULT_CONFIG.ambassador.tiers, ...((data.ambassador || {}).tiers || {}) },
-      tierBonus: {
-        ...DEFAULT_CONFIG.ambassador.tierBonus,
-        ...((data.ambassador || {}).tierBonus || {}),
-      },
-    },
+    ambassador: mergeNested(DEFAULT_CONFIG.ambassador, data.ambassador || {}),
   };
 }
 

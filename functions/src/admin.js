@@ -7,7 +7,7 @@ const { ethers } = require("ethers");
 const { admin, db, FieldValue, Timestamp } = require("./init");
 const { CALL_OPTS, requireAdmin } = require("./callable");
 const { CONFIG_REF, DEFAULT_CONFIG, getConfig } = require("./config");
-const { applyReferralInTx } = require("./points");
+const { readReferralCtx, applyReferralInTx, adjustPointsCore, NON_TASK_TYPES } = require("./points");
 
 // Plain param (not Secret Manager) so a first deploy never blocks on it. When
 // empty, the bootstrap endpoint is disabled (see the guard below).
@@ -67,17 +67,21 @@ const updateConfig = onCall(CALL_OPTS, async (request) => {
     }
   }
   if (patch.ambassador) {
+    // Every numeric ambassador setting (flat or one level nested, e.g. tiers,
+    // tierMultiplier, sponsorMilestones) is accepted by its default's shape.
     const a = patch.ambassador;
     const num = (v) => Math.max(0, Number(v) || 0);
+    const PCT = new Set(["ambassadorReferralPercent", "teamSharePercent"]);
     clean.ambassador = {};
-    if ("enabled" in a) clean.ambassador.enabled = Boolean(a.enabled);
-    if ("postPoints" in a) clean.ambassador.postPoints = num(a.postPoints);
-    if ("weeklyPostCap" in a) clean.ambassador.weeklyPostCap = num(a.weeklyPostCap);
-    for (const group of ["tiers", "tierBonus"]) {
-      if (!a[group]) continue;
-      clean.ambassador[group] = {};
-      for (const k of Object.keys(DEFAULT_CONFIG.ambassador[group])) {
-        if (k in a[group]) clean.ambassador[group][k] = num(a[group][k]);
+    for (const [k, def] of Object.entries(DEFAULT_CONFIG.ambassador)) {
+      if (!(k in a)) continue;
+      if (typeof def === "boolean") clean.ambassador[k] = Boolean(a[k]);
+      else if (typeof def === "number") clean.ambassador[k] = PCT.has(k) ? Math.min(100, num(a[k])) : num(a[k]);
+      else if (def && typeof def === "object" && a[k] && typeof a[k] === "object") {
+        clean.ambassador[k] = {};
+        for (const kk of Object.keys(def)) {
+          if (kk in a[k]) clean.ambassador[k][kk] = num(a[k][kk]);
+        }
       }
     }
   }
@@ -144,27 +148,42 @@ const approveSubmission = onCall(CALL_OPTS, async (request) => {
   const ledgerRef = db.collection("pointsLedger").doc(id);
   const config = await getConfig();
 
-  await db.runTransaction(async (tx) => {
+  const approved = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ledgerRef);
     if (!snap.exists) throw new HttpsError("not-found", "Submission not found.");
     const row = snap.data();
-    if (row.status !== "pending") return; // idempotent
+    if (row.status !== "pending") return null; // idempotent
     const userRef = db.collection("users").doc(row.uid);
     const userSnap = await tx.get(userRef);
     const amount = row.points || 0;
+    // Reads first (Firestore rule): referrer / sponsor status for the bonus.
+    const refCtx =
+      userSnap.exists && amount > 0 ? await readReferralCtx(tx, userSnap.data(), row.uid) : null;
 
-    tx.set(ledgerRef, { status: "final" }, { merge: true });
+    tx.set(ledgerRef, { status: "final", approvedAt: Timestamp.now() }, { merge: true });
     const userUpd = { points: FieldValue.increment(amount) };
+    if (!NON_TASK_TYPES.has(row.taskType)) userUpd.tasksDone = FieldValue.increment(1);
     // Mark the follow done on approval so its quest hides for the user.
     if (row.taskType === "follow_x") userUpd.followXDone = true;
     if (row.taskType === "follow_ig") userUpd.followIgDone = true;
     tx.set(userRef, userUpd, { merge: true });
 
-    // Referral bonus finalizes together with the approved submission.
-    if (userSnap.exists) {
-      applyReferralInTx(tx, { ...userSnap.data(), __uid: row.uid }, amount, id, config.referral);
+    // Referral bonus (+ ambassador team share) finalizes with the submission.
+    if (refCtx) {
+      applyReferralInTx(tx, { ...userSnap.data(), __uid: row.uid }, amount, id, config, refCtx);
     }
+    return row;
   });
+
+  // Ambassador submissions also count toward the monthly activity rule and
+  // the monthly ambassador board (runs only when this call flipped the row).
+  if (approved && String(approved.taskType).startsWith("ambassador_") && approved.taskType !== "ambassador_tier") {
+    try {
+      await require("./ambassador").recordApproval(approved.uid, approved.points || 0);
+    } catch (e) {
+      console.warn("ambassador recordApproval failed:", e.message);
+    }
+  }
   return { ok: true };
 });
 
@@ -240,24 +259,7 @@ const adjustPoints = onCall(CALL_OPTS, async (request) => {
   const reason = String(request.data?.reason || "admin adjustment").slice(0, 200);
   if (!uid || delta === 0) throw new HttpsError("invalid-argument", "Need a uid and a non-zero delta.");
 
-  const userRef = db.collection("users").doc(uid);
-  const newTotal = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(userRef);
-    if (!snap.exists) throw new HttpsError("not-found", "User not found.");
-    const cur = snap.data().points || 0;
-    const applied = Math.max(delta, -cur); // clamp so total >= 0
-    tx.set(userRef, { points: FieldValue.increment(applied) }, { merge: true });
-    tx.set(db.collection("pointsLedger").doc(), {
-      uid,
-      taskType: "admin_adjust",
-      points: applied,
-      refId: `adjust:${Date.now()}`,
-      status: "final",
-      reason,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    return cur + applied;
-  });
+  const newTotal = await adjustPointsCore(uid, delta, reason);
   return { ok: true, uid, points: newTotal };
 });
 

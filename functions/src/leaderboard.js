@@ -34,6 +34,7 @@ const getLeaderboard = onCall(CALL_OPTS, async (request) => {
       // Prefer the name the user set for themselves, then their X handle.
       name: u.displayName || u.xHandle || "Anon",
       points: u.points || 0,
+      amb: u.ambTier || null, // ambassador badge (set by src/ambassador.js)
     };
   });
 });
@@ -85,10 +86,19 @@ async function distributeLeaderboardRewards() {
 
 // Daily job at 00:00 UTC (a fixed, predictable time — easier to reason about
 // than "every 24 hours" drifting from deploy time).
+// The same daily run also does the ambassador program's upkeep (monthly
+// activity rule, member counts, tier bonuses, sponsor milestones) so the
+// program needs no scheduled function of its own.
 const dailyLeaderboardRewards = onSchedule(
-  { schedule: "0 0 * * *", timeZone: "UTC", region: "us-central1" },
+  { schedule: "0 0 * * *", timeZone: "UTC", region: "us-central1", timeoutSeconds: 540 },
   async () => {
     await distributeLeaderboardRewards();
+    try {
+      const r = await require("./ambassador").dailyMaintenance();
+      console.log("Ambassador upkeep:", JSON.stringify(r));
+    } catch (e) {
+      console.error("ambassador upkeep failed:", e.message);
+    }
   },
 );
 

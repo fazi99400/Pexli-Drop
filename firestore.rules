@@ -58,6 +58,26 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Ambassador program — function-only. Contact details (email, WhatsApp,
+    // Telegram) live in ambassadorContacts and are NEVER readable by any
+    // client, admin included: the admin UI reads them through the
+    // `ambassador` callable, which checks the admin claim server-side.
+    match /ambassadors/{uid} {
+      allow read, write: if false;
+    }
+    match /ambassadorContacts/{uid} {
+      allow read, write: if false;
+    }
+    match /ambassadorStatus/{uid} {
+      allow read, write: if false;
+    }
+    match /ambassadorMissions/{id} {
+      allow read, write: if false;
+    }
+    match /ambassadorSettings/{doc} {
+      allow read, write: if false;
+    }
+
     // Everything else: closed by default.
     match /{document=**} {
       allow read, write: if false;

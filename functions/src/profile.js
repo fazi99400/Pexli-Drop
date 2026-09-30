@@ -202,7 +202,8 @@ const getMyReferrals = onCall(CALL_OPTS, async (request) => {
       return {
         uid: d.id,
         name: u.displayName || u.xHandle || "Anon",
-        wallet: u.walletAddress || "",
+        // Shortened: a referrer never needs (or gets) anyone's full wallet.
+        wallet: u.walletAddress ? `${u.walletAddress.slice(0, 6)}…${u.walletAddress.slice(-4)}` : "",
         theirPoints: u.points || 0,
         earnedFromThem: earnByUser[d.id] || 0,
         joinedAt: toMs(u.createdAt),
@@ -311,6 +312,8 @@ function publicProfile(d = {}) {
     referredBy: d.referredBy || null,
     referralCount: d.referralCount || 0,
     referralPointsEarned: d.referralPointsEarned || 0,
+    teamPointsEarned: d.teamPointsEarned || 0,
+    ambTier: d.ambTier || null,
     // Admin moderation
     blocked: !!d.blocked,
     blockedUntil: d.blockedUntil ? (d.blockedUntil.toMillis ? d.blockedUntil.toMillis() : Number(d.blockedUntil) || null) : null,
