@@ -1447,12 +1447,16 @@ function UserRow({ u, onChanged }) {
                 Blocked{u.blockedUntil ? ` till ${new Date(u.blockedUntil).toLocaleDateString()}` : " (permanent)"}
               </span>
             )}
-            {u.forceActivated && <span className="badge on">Force-active</span>}
-            {!u.googleLinked && <span className="badge pending">No Google</span>}
-            {!u.xHandleSet && <span className="badge pending">No X</span>}
-            {!isBlockedNow && !u.forceActivated && u.googleLinked && u.xHandleSet && (
-              <span className="subtle">—</span>
+            {/* Same rule as the app (AuthContext.isActive): a saved wallet +
+                ANY one login (Google OR X) = active. Both are not required. */}
+            {u.walletAddress && (u.googleLinked || u.xHandleSet || u.forceActivated) ? (
+              <span className="badge on">Active</span>
+            ) : (
+              <span className="badge pending">Needs wallet</span>
             )}
+            {u.forceActivated && <span className="badge on">Force-active</span>}
+            {u.googleLinked && <span className="badge">Google</span>}
+            {u.xHandleSet && <span className="badge">X</span>}
           </div>
         </td>
         <td>
