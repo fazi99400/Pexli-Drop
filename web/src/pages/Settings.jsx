@@ -53,6 +53,7 @@ function LinksCard() {
     <div className="panel mobile-only">
       <h3 className="card-title">More</h3>
       <div className="links-grid">
+        <Link className="btn btn-sm btn-ghost" to="/ambassador">Ambassadors</Link>
         <Link className="btn btn-sm btn-ghost" to="/guide">Guide</Link>
         <Link className="btn btn-sm btn-ghost" to="/faq">FAQ</Link>
         <a className="btn btn-sm btn-ghost" href={LINKS.main} target="_blank" rel="noreferrer">Pexli</a>

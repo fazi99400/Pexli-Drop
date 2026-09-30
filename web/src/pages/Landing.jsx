@@ -189,7 +189,8 @@ export default function Landing() {
           <p className="subtle" style={{ fontSize: 12, marginTop: 14 }}>
             By continuing you agree to our <Link to="/terms">Terms</Link> &amp;{" "}
             <Link to="/privacy">Privacy Policy</Link>. New here?{" "}
-            <Link to="/guide">Read the guide</Link> or <Link to="/faq">FAQ</Link>.
+            <Link to="/guide">Read the guide</Link> or <Link to="/faq">FAQ</Link>. Want to represent
+            Pexli? See the <Link to="/ambassador">Ambassador Program</Link>.
           </p>
         </div>
       </section>

@@ -16,7 +16,7 @@
 // flags the ambassador as eligible for the post-funding cash reward.
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { db, Timestamp } = require("./init");
-const { CALL_OPTS, requireAuth, requireAdmin, loadUser } = require("./callable");
+const { CALL_OPTS, requireAuth, requireAdmin, loadUser, isCurrentlyBlocked } = require("./callable");
 const { getConfig } = require("./config");
 const { awardPoints } = require("./points");
 const { normalizeUrl, sha256 } = require("./util");
@@ -62,16 +62,25 @@ function publicApp(uid, d) {
 }
 
 // Count people referred by `uid`, and how many of them saved a wallet.
+// Single-field equality query (auto-indexed, no composite index needed);
+// select() keeps each read tiny. Bots and blocked accounts never count toward
+// a tier — otherwise a banned farm could still pay out a tier bonus.
 async function countCommunity(uid) {
   const snap = await db
     .collection("users")
     .where("referredBy", "==", uid)
-    .select("walletAddress")
+    .select("walletAddress", "isBot", "blocked", "blockedUntil")
     .limit(20000)
     .get();
+  let invited = 0;
   let verified = 0;
-  for (const d of snap.docs) if (d.get("walletAddress")) verified++;
-  return { invited: snap.size, verified };
+  for (const d of snap.docs) {
+    const u = d.data();
+    if (u.isBot || isCurrentlyBlocked(u)) continue;
+    invited++;
+    if (u.walletAddress) verified++;
+  }
+  return { invited, verified };
 }
 
 function tierFor(verified, thresholds) {
@@ -84,7 +93,14 @@ function tierFor(verified, thresholds) {
 async function refreshStats(uid, app, cfg) {
   const fresh = toMs(app.statsAt);
   if (fresh && Date.now() - fresh < STATS_TTL_MS) return app;
-  const { invited, verified } = await countCommunity(uid);
+  let counts;
+  try {
+    counts = await countCommunity(uid);
+  } catch (e) {
+    console.warn("ambassador stats count failed:", e.message);
+    return app; // show the last known stats rather than failing the page
+  }
+  const { invited, verified } = counts;
   const tier = tierFor(verified, cfg.tiers);
   const upd = {
     invited,
@@ -95,16 +111,32 @@ async function refreshStats(uid, app, cfg) {
   };
   await APPS.doc(uid).set(upd, { merge: true });
 
-  // One-time bonus for every tier reached so far (ledger id makes it exactly-once).
+  // One-time bonus for every tier reached so far. The deterministic ledger id
+  // (taskType + refId) makes each bonus exactly-once even under concurrent
+  // refreshes; `bonusPaid` just skips the no-op transactions on later views.
   const reached = TIER_ORDER.slice(0, TIER_ORDER.indexOf(tier) + 1);
+  const paid = { ...(app.bonusPaid || {}) };
+  let paidChanged = false;
   for (const t of reached) {
+    if (paid[t]) continue;
     const pts = Number(cfg.tierBonus[t]) || 0;
     if (pts <= 0) continue;
     try {
       await awardPoints({ uid, taskType: "ambassador_tier", points: pts, refId: `${t}:${uid}` });
+      paid[t] = true;
+      paidChanged = true;
     } catch (e) {
-      if (!/already/i.test(e.message || "")) console.warn("tier bonus failed:", e.message);
+      if (e.code === "already-exists" || /already/i.test(e.message || "")) {
+        paid[t] = true;
+        paidChanged = true;
+      } else {
+        console.warn("tier bonus failed:", e.message);
+      }
     }
+  }
+  if (paidChanged) {
+    await APPS.doc(uid).set({ bonusPaid: paid }, { merge: true });
+    upd.bonusPaid = paid;
   }
   return { ...app, ...upd };
 }
@@ -179,7 +211,41 @@ function canonicalXPost(raw) {
   return { url: `https://x.com/${m[1].toLowerCase()}/status/${m[2]}`, handle: m[1], id: m[2] };
 }
 
+// Reserve one slot of this week's cap atomically, so parallel submits can't
+// both read "6 of 7 used" and slip past the limit. Returns the new count.
+async function reserveWeeklySlot(ref, wk, cap) {
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data().status !== "approved") {
+      throw new HttpsError("permission-denied", "Only approved ambassadors can submit posts.");
+    }
+    const app = snap.data();
+    const used = app.week === wk ? app.weekPosts || 0 : 0;
+    if (used >= cap) {
+      throw new HttpsError("resource-exhausted", `Weekly limit reached (${cap} posts). Resets Monday.`);
+    }
+    tx.set(ref, { week: wk, weekPosts: used + 1 }, { merge: true });
+    return used + 1;
+  });
+}
+
+// Give a reserved slot back when the submission didn't go through.
+async function releaseWeeklySlot(ref, wk) {
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const app = snap.exists ? snap.data() : {};
+      if (app.week === wk && (app.weekPosts || 0) > 0) {
+        tx.set(ref, { weekPosts: app.weekPosts - 1 }, { merge: true });
+      }
+    });
+  } catch (e) {
+    console.warn("releaseWeeklySlot failed:", e.message);
+  }
+}
+
 async function doSubmitPost(uid, data, cfg) {
+  await loadUser(uid); // blocked accounts can't submit (throws with details)
   const ref = APPS.doc(uid);
   const snap = await ref.get();
   if (!snap.exists || snap.data().status !== "approved") {
@@ -193,36 +259,38 @@ async function doSubmitPost(uid, data, cfg) {
   }
 
   const wk = weekKey();
-  const used = app.week === wk ? app.weekPosts || 0 : 0;
-  if (used >= cfg.weeklyPostCap) {
-    throw new HttpsError("resource-exhausted", `Weekly limit reached (${cfg.weeklyPostCap} posts). Resets Monday.`);
-  }
+  const cap = Number(cfg.weeklyPostCap) || 0;
+  const count = await reserveWeeklySlot(ref, wk, cap);
 
-  // Global duplicate guard (same collection the other link tasks use).
+  // Global duplicate guard (same collection the other link tasks use). If
+  // anything after the reservation fails, hand the slot (and the link, if we
+  // claimed it) back so a failed attempt never eats the user's weekly cap.
+  const linkRef = db.collection("submittedLinks").doc(sha256(post.url));
+  let linkClaimed = false;
   try {
-    await db.collection("submittedLinks").doc(sha256(post.url)).create({
+    try {
+      await linkRef.create({ uid, url: post.url, taskType: "ambassador_post", createdAt: Timestamp.now() });
+      linkClaimed = true;
+    } catch (e) {
+      if (e.code === 6 || /already exists/i.test(e.message || "")) {
+        throw new HttpsError("already-exists", "That post has already been submitted.");
+      }
+      throw e;
+    }
+    await awardPoints({
       uid,
-      url: post.url,
       taskType: "ambassador_post",
-      createdAt: Timestamp.now(),
+      points: cfg.postPoints,
+      refId: post.url,
+      status: "pending",
+      extra: { tweetUrl: post.url, handle: post.handle },
     });
   } catch (e) {
-    if (e.code === 6 || /already exists/i.test(e.message || "")) {
-      throw new HttpsError("already-exists", "That post has already been submitted.");
-    }
+    if (linkClaimed) await linkRef.delete().catch(() => {});
+    await releaseWeeklySlot(ref, wk);
     throw e;
   }
-
-  await awardPoints({
-    uid,
-    taskType: "ambassador_post",
-    points: cfg.postPoints,
-    refId: post.url,
-    status: "pending",
-    extra: { tweetUrl: post.url, handle: post.handle },
-  });
-  await ref.set({ week: wk, weekPosts: used + 1 }, { merge: true });
-  return { ok: true, message: "Submitted. Points are credited after a human review.", postsThisWeek: used + 1 };
+  return { ok: true, message: "Submitted. Points are credited after a human review.", postsThisWeek: count };
 }
 
 async function doAdminList(data) {
@@ -248,6 +316,7 @@ async function doAdminReview(adminUid, data) {
   await ref.set(
     {
       status: decision,
+      ...(decision === "rejected" ? { cashEligible: false } : {}),
       note: clip(data.note, 300),
       reviewedAt: Timestamp.now(),
       reviewedBy: adminUid,
