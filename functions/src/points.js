@@ -19,38 +19,95 @@ function ledgerId(taskType, refId) {
   return sha256(`${taskType}:${refId}`);
 }
 
+// Read what the referral payout needs to know about the referrer, INSIDE the
+// transaction's read phase (Firestore needs every read before any write).
+// ambassadorStatus/{uid} is a tiny, rarely-written doc ({active, sponsorUid})
+// kept in sync by src/ambassador.js, so reading it adds no contention on the
+// busy users/{referrer} doc. Returns null when there is no referrer.
+async function readReferralCtx(tx, referredData, earnerUid) {
+  const referrerUid = referredData?.referredBy;
+  if (!referrerUid) return null;
+  const st = await tx.get(db.collection("ambassadorStatus").doc(referrerUid));
+  const s = st.exists ? st.data() : {};
+  const isAmb = s.active === true;
+  let sponsorUid = null;
+  // Team share only flows through an ACTIVE ambassador to an ACTIVE sponsor,
+  // and never back to the person who earned the points.
+  if (isAmb && s.sponsorUid && s.sponsorUid !== earnerUid && s.sponsorUid !== referrerUid) {
+    const sp = await tx.get(db.collection("ambassadorStatus").doc(s.sponsorUid));
+    if (sp.exists && sp.data().active === true) sponsorUid = s.sponsorUid;
+  }
+  return { referrerUid, isAmb, sponsorUid };
+}
+
 /**
- * Apply the referral bonus for `referredData` inside an open transaction.
- * Uses increments only (no reads), so it's safe to call after other writes.
+ * Apply the referral bonus (and the ambassador team share) for an award,
+ * inside an open transaction, AFTER readReferralCtx ran in the read phase.
+ * Uses writes only. Both rows use deterministic ids derived from the unique
+ * source ledger id, so they are exactly-once together with the source award.
+ *
+ * Two levels, never deeper:
+ *   member earns X → referrer gets percent% of X (15% if an active ambassador)
+ *                  → that ambassador's sponsor gets teamSharePercent% of X
+ * Neither row triggers anything further.
  * @returns {number} bonus points granted to the referrer (0 if none).
  */
-function applyReferralInTx(tx, referredData, amount, sourceId, referralCfg) {
-  if (!referralCfg?.enabled) return 0;
-  const referrerUid = referredData?.referredBy;
-  if (!referrerUid || amount <= 0) return 0;
-  const bonus = Math.floor((amount * (Number(referralCfg.percent) || 0)) / 100);
-  if (bonus <= 0) return 0;
-
-  const refLedgerRef = db.collection("pointsLedger").doc(ledgerId("referral", sourceId));
-  tx.set(refLedgerRef, {
-    uid: referrerUid,
-    taskType: "referral",
-    points: bonus,
-    refId: sourceId,
-    status: "final",
-    sourceUid: referredData.__uid || null,
-    createdAt: Timestamp.now(),
-  });
-  tx.set(
-    db.collection("users").doc(referrerUid),
-    {
-      points: FieldValue.increment(bonus),
-      referralPointsEarned: FieldValue.increment(bonus),
-    },
-    { merge: true },
-  );
+function applyReferralInTx(tx, referredData, amount, sourceId, config, ctx) {
+  const referralCfg = config?.referral;
+  if (!referralCfg?.enabled || !ctx || !ctx.referrerUid || amount <= 0) return 0;
+  const amb = config.ambassador || {};
+  const pct = ctx.isAmb ? Number(amb.ambassadorReferralPercent) || 0 : Number(referralCfg.percent) || 0;
+  const bonus = Math.floor((amount * pct) / 100);
+  if (bonus > 0) {
+    tx.set(db.collection("pointsLedger").doc(ledgerId("referral", sourceId)), {
+      uid: ctx.referrerUid,
+      taskType: "referral",
+      points: bonus,
+      refId: sourceId,
+      status: "final",
+      sourceUid: referredData.__uid || null,
+      percent: pct,
+      createdAt: Timestamp.now(),
+    });
+    tx.set(
+      db.collection("users").doc(ctx.referrerUid),
+      { points: FieldValue.increment(bonus), referralPointsEarned: FieldValue.increment(bonus) },
+      { merge: true },
+    );
+  }
+  if (ctx.sponsorUid) {
+    const share = Math.floor((amount * (Number(amb.teamSharePercent) || 0)) / 100);
+    if (share > 0) {
+      tx.set(db.collection("pointsLedger").doc(ledgerId("team_share", sourceId)), {
+        uid: ctx.sponsorUid,
+        taskType: "team_share",
+        points: share,
+        refId: sourceId,
+        status: "final",
+        sourceUid: referredData.__uid || null,
+        viaUid: ctx.referrerUid, // the recruited ambassador whose member earned it
+        createdAt: Timestamp.now(),
+      });
+      tx.set(
+        db.collection("users").doc(ctx.sponsorUid),
+        { points: FieldValue.increment(share), teamPointsEarned: FieldValue.increment(share) },
+        { merge: true },
+      );
+    }
+  }
   return bonus;
 }
+
+// Award types that are NOT a completed task (bonuses, shares, adjustments):
+// they don't bump the user's tasksDone counter shown on an ambassador's team.
+const NON_TASK_TYPES = new Set([
+  "referral",
+  "team_share",
+  "leaderboard",
+  "ambassador_tier",
+  "sponsor_milestone",
+  "admin_adjust",
+]);
 
 /**
  * @param {object} p
@@ -61,6 +118,8 @@ function applyReferralInTx(tx, referredData, amount, sourceId, referralCfg) {
  * @param {object} [p.userUpdates]      extra fields to set on users/{uid}
  * @param {"final"|"pending"} [p.status] pending = awaits admin approval; no
  *                                       points added to the cached total yet.
+ * @param {boolean} [p.noReferral]     skip the referral/team share (program
+ *                                       bonuses must never cascade).
  * @param {object} [p.extra]             extra fields stored on the ledger row
  *                                       itself (e.g. the submitted tweet URL /
  *                                       handle) so a human reviewer in
@@ -68,7 +127,16 @@ function applyReferralInTx(tx, referredData, amount, sourceId, referralCfg) {
  *                                       actually check, not just a bare refId.
  * @returns {Promise<{points:number, awarded:number, status:string}>}
  */
-async function awardPoints({ uid, taskType, points, refId, userUpdates = {}, status = "final", extra = {} }) {
+async function awardPoints({
+  uid,
+  taskType,
+  points,
+  refId,
+  userUpdates = {},
+  status = "final",
+  extra = {},
+  noReferral = false,
+}) {
   if (!uid || !taskType || !refId) {
     throw new HttpsError("internal", "awardPoints called without uid/taskType/refId.");
   }
@@ -90,6 +158,11 @@ async function awardPoints({ uid, taskType, points, refId, userUpdates = {}, sta
     const userData = userSnap.data();
     requireNotBlocked(userData); // blocked accounts earn nothing, app-wide
 
+    // Referral bonus only on final (credited) awards, never off a referral
+    // row itself (no chains), and never for program bonuses. Reads first.
+    const payReferral = status === "final" && taskType !== "referral" && !noReferral && amount > 0;
+    const refCtx = payReferral ? await readReferralCtx(tx, userData, uid) : null;
+
     tx.set(ledgerRef, {
       uid,
       taskType,
@@ -103,14 +176,11 @@ async function awardPoints({ uid, taskType, points, refId, userUpdates = {}, sta
     const update = { ...userUpdates };
     if (status === "final") {
       update.points = FieldValue.increment(amount);
+      if (!NON_TASK_TYPES.has(taskType)) update.tasksDone = FieldValue.increment(1);
     }
     tx.set(userRef, update, { merge: true });
 
-    // Referral bonus only on final (credited) awards, and never off a referral
-    // row itself (no infinite chains).
-    if (status === "final" && taskType !== "referral") {
-      applyReferralInTx(tx, { ...userData, __uid: uid }, amount, mainId, config.referral);
-    }
+    if (refCtx) applyReferralInTx(tx, { ...userData, __uid: uid }, amount, mainId, config, refCtx);
 
     const current = userData.points || 0;
     return {
@@ -121,4 +191,35 @@ async function awardPoints({ uid, taskType, points, refId, userUpdates = {}, sta
   });
 }
 
-module.exports = { awardPoints, ledgerId, applyReferralInTx };
+// Admin points adjustment (positive or negative, total clamped at >= 0) with
+// an audit ledger row. Shared by the adjustPoints callable and the
+// ambassador program's fraud forfeiture, so both go through one path.
+async function adjustPointsCore(uid, delta, reason) {
+  const userRef = db.collection("users").doc(uid);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    if (!snap.exists) throw new HttpsError("not-found", "User not found.");
+    const cur = snap.data().points || 0;
+    const applied = Math.max(delta, -cur); // clamp so total >= 0
+    tx.set(userRef, { points: FieldValue.increment(applied) }, { merge: true });
+    tx.set(db.collection("pointsLedger").doc(), {
+      uid,
+      taskType: "admin_adjust",
+      points: applied,
+      refId: `adjust:${Date.now()}`,
+      status: "final",
+      reason,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return cur + applied;
+  });
+}
+
+module.exports = {
+  awardPoints,
+  ledgerId,
+  readReferralCtx,
+  applyReferralInTx,
+  adjustPointsCore,
+  NON_TASK_TYPES,
+};
