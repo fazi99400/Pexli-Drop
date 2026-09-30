@@ -34,7 +34,6 @@ export const DEFAULT_CONFIG = {
   referral: { enabled: true, percent: 10 },
   faucet: { amountPex: "0.05" },
   tx: { amountPex: "0.0004" },
-  autoApproveFollows: true,
   leaderboard: {
     enabled: true,
     rewards: { rank1: 200, rank2: 150, rank3: 100, top10: 75, top50: 50, top100: 30 },

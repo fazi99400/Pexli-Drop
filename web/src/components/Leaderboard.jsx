@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, errMessage } from "../lib/functions";
 import { useAuth } from "../context/AuthContext";
 import Icon from "./Icon";
 
-// Top-100 leaderboard with the daily rank-bonus legend.
-export default function Leaderboard() {
+// Top-100 leaderboard with the daily rank-bonus legend. Pass `limit` (e.g. 3)
+// for a compact preview — the home dashboard shows only the top few, with a
+// link to the full ranking; the dedicated /leaderboard page renders this with
+// no limit and shows all 100.
+export default function Leaderboard({ limit } = {}) {
   const { user, config } = useAuth();
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState("");
@@ -26,6 +30,7 @@ export default function Leaderboard() {
   }, []);
 
   const rankClass = (rank) => (rank <= 3 ? `rankbadge r${rank}` : "rankbadge");
+  const displayRows = limit && rows ? rows.slice(0, limit) : rows;
 
   return (
     <>
@@ -34,10 +39,10 @@ export default function Leaderboard() {
           <Icon name="trophy" size={22} style={{ verticalAlign: "-4px", marginRight: 6 }} />
           Leaderboard
         </h2>
-        <span className="count">Top 100 · updates live</span>
+        <span className="count">{limit ? `Top ${limit}` : "Top 100"} · updates live</span>
       </div>
 
-      {lb && lb.enabled && (
+      {!limit && lb && lb.enabled && (
         <div className="panel" style={{ marginBottom: 16 }}>
           <p className="task-desc" style={{ marginTop: 0 }}>
             Every 24 hours the top players earn bonus points by rank:
@@ -54,11 +59,11 @@ export default function Leaderboard() {
       )}
 
       {err && <p className="msg err">{err}</p>}
-      {rows === null ? (
+      {displayRows === null ? (
         <div className="center" style={{ minHeight: 120 }}>
           <div className="spin" />
         </div>
-      ) : rows.length === 0 ? (
+      ) : displayRows.length === 0 ? (
         <p className="subtle">No players yet — be the first to earn points!</p>
       ) : (
         <div className="table-wrap">
@@ -71,7 +76,7 @@ export default function Leaderboard() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {displayRows.map((row) => {
                 const me = user && row.uid === user.uid;
                 return (
                   <tr key={row.uid} style={me ? { background: "rgba(255, 154, 61,0.10)" } : undefined}>
@@ -89,6 +94,14 @@ export default function Leaderboard() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {limit && (
+        <div className="row" style={{ justifyContent: "center", marginTop: 12 }}>
+          <Link className="btn btn-sm btn-ghost" to="/leaderboard">
+            View full leaderboard <Icon name="external" size={14} />
+          </Link>
         </div>
       )}
     </>

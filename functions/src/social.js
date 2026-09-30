@@ -73,13 +73,16 @@ async function fetchTweetOembed(username, id) {
   }
 }
 
-// Follow verification.
-//  - X: PROOF-BY-TWEET (real, automatic, free). The user posts a tweet tagging
-//    @PexliLabs; we confirm via oEmbed that it's authored by their saved handle
-//    and mentions @PexliLabs. Awarded once per user. (When a paid X API is added
-//    later, src/tasks/x.js already holds the direct follow-graph check to swap in.)
-//  - Instagram: no free verification — credited on submit, or admin review when
-//    config.autoApproveFollows is off.
+// Follow verification — ALWAYS goes to a human in Admin → Moderation before
+// points finalize. There's no free way to read either platform's real
+// follower graph, so nothing here is trusted as final on its own:
+//  - X: the user posts a tweet tagging @PexliLabs; oEmbed pre-checks it's
+//    really authored by their saved handle and mentions @PexliLabs (rejects
+//    obvious junk immediately), but even a clean check only queues the claim
+//    — an admin does the final follow check before it's credited.
+//  - Instagram: no free verification at all — always queued for review.
+// followXDone/followIgDone (which hide the completed quest) are set by the
+// admin's approval (see admin.js approveSubmission), not here.
 const submitFollow = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const platform = request.data?.platform === "instagram" ? "instagram" : "x";
@@ -109,28 +112,22 @@ const submitFollow = onCall(CALL_OPTS, async (request) => {
       taskType: "follow_x",
       points: config.points.follow_x,
       refId: `follow_x:${uid}`,
-      userUpdates: { followXDone: true },
+      status: "pending",
+      extra: { tweetUrl: request.data?.tweetUrl || request.data?.url || "", handle },
     });
-    return { ok: true, ...result, status: "final", message: "Verified! Points added." };
+    return { ok: true, ...result, status: "pending", message: "Submitted for review." };
   }
 
-  // Instagram
-  const status = config.autoApproveFollows !== false ? "final" : "pending";
+  // Instagram — always queued, no automated check exists to pre-filter with.
   const result = await awardPoints({
     uid,
     taskType,
     points: config.points[taskType],
     refId: `${taskType}:${uid}`,
-    status,
-    // Only hide the quest once it's actually credited (not while pending review).
-    userUpdates: status === "final" ? { followIgDone: true } : {},
+    status: "pending",
+    extra: { handle },
   });
-  return {
-    ok: true,
-    ...result,
-    status,
-    message: status === "final" ? "Verified! Points added." : "Submitted for review.",
-  };
+  return { ok: true, ...result, status: "pending", message: "Submitted for review." };
 });
 
 // Verify a posted tweet (pool task) for free via oEmbed. The tweet must be by

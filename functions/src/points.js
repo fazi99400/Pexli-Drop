@@ -61,9 +61,14 @@ function applyReferralInTx(tx, referredData, amount, sourceId, referralCfg) {
  * @param {object} [p.userUpdates]      extra fields to set on users/{uid}
  * @param {"final"|"pending"} [p.status] pending = awaits admin approval; no
  *                                       points added to the cached total yet.
+ * @param {object} [p.extra]             extra fields stored on the ledger row
+ *                                       itself (e.g. the submitted tweet URL /
+ *                                       handle) so a human reviewer in
+ *                                       Admin → Moderation has something to
+ *                                       actually check, not just a bare refId.
  * @returns {Promise<{points:number, awarded:number, status:string}>}
  */
-async function awardPoints({ uid, taskType, points, refId, userUpdates = {}, status = "final" }) {
+async function awardPoints({ uid, taskType, points, refId, userUpdates = {}, status = "final", extra = {} }) {
   if (!uid || !taskType || !refId) {
     throw new HttpsError("internal", "awardPoints called without uid/taskType/refId.");
   }
@@ -91,6 +96,7 @@ async function awardPoints({ uid, taskType, points, refId, userUpdates = {}, sta
       points: amount,
       refId,
       status, // "final" | "pending"
+      ...extra,
       createdAt: Timestamp.now(),
     });
 

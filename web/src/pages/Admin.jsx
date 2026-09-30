@@ -448,17 +448,10 @@ function ConfigTab() {
       <div className="card mt">
         <h3 className="task-title">Follow verification</h3>
         <p className="subtle">
-          Auto-credit follows instantly (X handle is checked for existence). Turn off to review
-          each follow manually in Moderation.
+          Every follow submission (X and Instagram) always queues in <b>Moderation</b> for a human
+          to check before points are credited — there's no free way to read either platform's real
+          follower list, so nothing is auto-approved.
         </p>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={draft.autoApproveFollows !== false}
-            onChange={(e) => setDraft({ ...draft, autoApproveFollows: e.target.checked })}
-          />
-          <span>Auto-approve follows</span>
-        </label>
       </div>
 
       <div className="card mt">
@@ -493,6 +486,8 @@ function TweetPoolTab() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [reBusy, setReBusy] = useState(false);
+  const [reMsg, setReMsg] = useState(null);
 
   async function upload() {
     setBusy(true);
@@ -508,23 +503,52 @@ function TweetPoolTab() {
     }
   }
 
+  async function reseed() {
+    setReBusy(true);
+    setReMsg(null);
+    try {
+      const res = await api.reseedDefaultTweets();
+      setReMsg({ ok: true, text: `Pool now has the ${res.data.count} built-in starter tweets.` });
+    } catch (e) {
+      setReMsg({ ok: false, text: errMessage(e) });
+    } finally {
+      setReBusy(false);
+    }
+  }
+
   const count = text.split("\n").filter((l) => l.trim()).length;
   return (
-    <div className="card">
-      <h3 className="task-title">Bulk-upload tweets</h3>
-      <p className="subtle">One tweet per line (≤280 chars, include hashtags). Paste up to 10k.</p>
-      <textarea
-        className="task-input"
-        style={{ minHeight: 260, fontFamily: "inherit" }}
-        placeholder={"gm from the Pexli chain! #Pexli #PEX\nJust swapped on @LifeloxDEX ⚡ #Pexli"}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-      />
-      <div className="row mt">
-        <button className="btn btn-primary" onClick={upload} disabled={busy || !count}>
-          {busy ? "Uploading…" : `Upload ${count} tweets`}
-        </button>
-        <Msg msg={msg} />
+    <div>
+      <div className="card mb">
+        <h3 className="task-title">Starter tweets</h3>
+        <p className="subtle">
+          40 built-in tweets ship with the app and auto-seed the pool the first time anyone
+          requests a tweet. Use this if the built-in set was just expanded and you want the live
+          pool refreshed to match right away.
+        </p>
+        <div className="row">
+          <button className="btn btn-sm" onClick={reseed} disabled={reBusy}>
+            {reBusy ? "Reseeding…" : "Reseed starter tweets"}
+          </button>
+          <Msg msg={reMsg} />
+        </div>
+      </div>
+      <div className="card">
+        <h3 className="task-title">Bulk-upload tweets</h3>
+        <p className="subtle">One tweet per line (≤280 chars, include hashtags). Paste up to 10k.</p>
+        <textarea
+          className="task-input"
+          style={{ minHeight: 260, fontFamily: "inherit" }}
+          placeholder={"gm from the Pexli chain! #Pexli #PEX\nJust swapped on @LifeloxDEX ⚡ #Pexli"}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div className="row mt">
+          <button className="btn btn-primary" onClick={upload} disabled={busy || !count}>
+            {busy ? "Uploading…" : `Upload ${count} tweets`}
+          </button>
+          <Msg msg={msg} />
+        </div>
       </div>
     </div>
   );
@@ -582,14 +606,21 @@ function ModerationTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r) => {
+                // Follow submissions carry the actual evidence to review
+                // (tweetUrl / handle) — prefer that over the bare refId,
+                // which for a follow is just "follow_x:<uid>".
+                const link = r.tweetUrl || (/^https?:/.test(r.refId) ? r.refId : null);
+                return (
                 <tr key={r.id}>
                   <td>{r.taskType}</td>
                   <td className="mono">
-                    {/^https?:/.test(r.refId) ? (
-                      <a href={r.refId} target="_blank" rel="noreferrer">
-                        {r.refId}
+                    {link ? (
+                      <a href={link} target="_blank" rel="noreferrer">
+                        {link}
                       </a>
+                    ) : r.handle ? (
+                      `@${r.handle}`
                     ) : (
                       r.refId
                     )}
@@ -604,7 +635,8 @@ function ModerationTab() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

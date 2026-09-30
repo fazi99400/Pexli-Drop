@@ -5,7 +5,7 @@
 const crypto = require("crypto");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { admin, db, FieldValue, Timestamp } = require("../init");
-const { CALL_OPTS, requireAuth, loadUser, requireTaskEnabled } = require("../callable");
+const { CALL_OPTS, requireAuth, requireAdmin, loadUser, requireTaskEnabled } = require("../callable");
 const { awardPoints } = require("../points");
 const { ensureProfileDoc } = require("../profile");
 const { minutesSince } = require("../util");
@@ -284,10 +284,39 @@ const DEFAULT_TWEETS = [
   "Rust lane 🦀 or Solidity lane ⟠ — build your way on @PexliLabs. #Pexli #PEX #Web3",
   "Another day, another quest done on @PexliLabs 🎯 Stacking points for the PEX airdrop. #Pexli #PEX",
   "Bullish on @PexliLabs — real tech, real testnet, real airdrop. 🚀 #Pexli #PEX",
+  "Sent PEX to a friend in under a second on @PexliLabs ⚡ No custodial nonsense. #Pexli #PEX",
+  "@PexliLabs testnet, one chain, two lanes — Rust and Solidity living together. 🦀⟠ #Pexli #PEX",
+  "Woke up, checked my @PexliLabs points, back to grinding quests. ☕🎯 #Pexli #PEX #Airdrop",
+  "The @PexliLabs leaderboard is getting spicy 🌶️ top spots won't hold themselves. #Pexli #PEX",
+  "Zero gas drama, zero bridge headaches — just @PexliLabs and a wallet. 🔥 #Pexli #PEX",
+  "Referred 3 friends to @PexliLabs today, referral points stacking up. 🚀 #Pexli #PEX",
+  "In-app wallet, in-app swap, in-app everything — @PexliLabs cut out the extensions. #Pexli #PEX",
+  "Every quest on @PexliLabs actually does something on-chain. Real activity, real points. #Pexli #PEX",
+  "@PexliLabs airdrop math is simple: more points, bigger share of the drop. Stack up. 📈 #Pexli #PEX",
+  "Faucet, swap, send — did the full @PexliLabs loop before my coffee got cold. ☕ #Pexli #PEX",
+  "Two smart contract lanes, one testnet — @PexliLabs is building different. 🛠️ #Pexli #PEX",
+  "Not financial advice, but @PexliLabs testnet is worth your five minutes today. ⏱️ #Pexli #PEX",
+  "@PexliLabs points convert to mainnet PEX — pro-rata, no games, just grind. #Pexli #PEX #Airdrop",
+  "Just linked my wallet on @PexliLabs — one click and I was in. Smooth onboarding. #Pexli #PEX",
+  "Rust devs, Solidity devs — @PexliLabs has a lane for both of you. 🦀⟠ #Pexli #PEX #Web3",
+  "Daily @PexliLabs check-in: faucet claimed, swap done, points banked. ✅ #Pexli #PEX",
+  "The @PexliLabs referral program actually pays — invite, earn, repeat. 🔁 #Pexli #PEX",
+  "Testnet PEX hits the wallet instantly on @PexliLabs. No waiting around. ⚡ #Pexli #PEX",
+  "Building my @PexliLabs points before the airdrop snapshot. Are you? 👀 #Pexli #PEX",
+  "@PexliLabs feels like a mainnet already — fast blocks, clean UI, real quests. #Pexli #PEX",
+  "Tagging @PexliLabs because this testnet earned it. Dual-lane chains are the future. #Pexli #PEX",
+  "Just hit a new personal best on the @PexliLabs leaderboard. Let's go. 🏆 #Pexli #PEX",
+  "@PexliLabs airdrop, one wallet, every quest completed today. Consistency wins. #Pexli #PEX",
+  "If you're building on Rust or Solidity, @PexliLabs wants you testing. 🛠️ #Pexli #PEX #Web3",
+  "The @PexliLabs swap widget just works — no popups, no extension installs. #Pexli #PEX",
+  "Another referral joined via my @PexliLabs link 🎉 more points for both of us. #Pexli #PEX",
 ];
 
-// Seed the starter tweets when the pool is empty. Deterministic ids make it
-// idempotent under concurrent first-time assigns.
+// Seed the starter tweets. Deterministic ids make this idempotent AND safe to
+// re-run whenever DEFAULT_TWEETS grows — running it again just refreshes/
+// extends the pool to match the current array (resetting each starter
+// tweet's assignment counter is harmless — it only affects round-robin
+// weighting), rather than only ever seeding once on an empty pool.
 async function seedDefaultTweets() {
   const batch = db.batch();
   DEFAULT_TWEETS.forEach((text, i) => {
@@ -298,6 +327,7 @@ async function seedDefaultTweets() {
     });
   });
   await batch.commit();
+  return DEFAULT_TWEETS.length;
 }
 
 // Assign a random active tweet to the user (respects the 30-min cooldown).
@@ -398,4 +428,21 @@ function normalizeTweetText(s) {
   return String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-module.exports = { xAuthStart, xLoginStart, xCallback, verifyFollowX, assignTweet, verifyTweet };
+// Admin-only: (re)seed the built-in starter tweets on demand — e.g. right
+// after DEFAULT_TWEETS above is edited/expanded, so the live pool picks up
+// the new set without waiting for it to happen to be empty.
+const reseedDefaultTweets = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+  const count = await seedDefaultTweets();
+  return { ok: true, count };
+});
+
+module.exports = {
+  xAuthStart,
+  xLoginStart,
+  xCallback,
+  verifyFollowX,
+  assignTweet,
+  verifyTweet,
+  reseedDefaultTweets,
+};
