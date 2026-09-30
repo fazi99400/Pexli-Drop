@@ -53,6 +53,7 @@ export default function Header() {
           {!user && (
             <>
               <Link className="btn btn-sm btn-ghost hide-sm" to="/guide">Guide</Link>
+              <Link className="btn btn-sm btn-ghost hide-sm" to="/ambassador">Ambassadors</Link>
               <Link className="btn btn-sm btn-ghost hide-sm" to="/faq">FAQ</Link>
             </>
           )}
@@ -75,6 +76,11 @@ export default function Header() {
           {user && (
             <button className="btn btn-sm btn-ghost nav-desktop" onClick={() => navigate("/referrals")} title="Referrals">
               <Icon name="users" size={16} /> <span className="hide-sm">Referrals</span>
+            </button>
+          )}
+          {user && (
+            <button className="btn btn-sm btn-ghost nav-desktop" onClick={() => navigate("/ambassador")} title="Ambassadors">
+              <Icon name="star" size={16} /> <span className="hide-sm">Ambassadors</span>
             </button>
           )}
           {user && (

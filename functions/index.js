@@ -128,5 +128,8 @@ exports.getLeaderboard = leaderboard.getLeaderboard;
 exports.dailyLeaderboardRewards = leaderboard.dailyLeaderboardRewards;
 exports.runLeaderboardRewards = leaderboard.runLeaderboardRewards;
 
+// Ambassador program (one callable, action-switched — one Cloud Run service)
+exports.ambassador = require("./src/ambassador").ambassador;
+
 // Scheduled
 exports.expireTweetAssignments = scheduled.expireTweetAssignments;

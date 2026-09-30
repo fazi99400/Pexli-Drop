@@ -64,6 +64,19 @@ export default function Dashboard() {
         <Leaderboard limit={3} />
       </div>
 
+      <div className="panel amb-cta mt">
+        <div>
+          <h3 className="card-title"><Icon name="star" /> Become a Pexli Ambassador</h3>
+          <p className="task-desc" style={{ margin: 0 }}>
+            Post about Pexli on X, grow a community of verified members and climb from Rising to
+            Champion for bonus points. Lead and Champion are eligible for a cash reward after funding.
+          </p>
+        </div>
+        <Link className="btn btn-primary btn-sm" to="/ambassador">
+          Learn more &amp; apply
+        </Link>
+      </div>
+
       <SectionHead title="Your Pexli wallet" />
       <div className="panel wallet-hub">
         <div className="row spread">

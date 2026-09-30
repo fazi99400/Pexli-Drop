@@ -835,3 +835,21 @@ img, svg, canvas, video { max-width: 100%; }
 /* Settings "More" links card (mobile) */
 .links-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .links-grid .btn { flex: 1 1 auto; justify-content: center; min-width: 90px; }
+
+/* Ambassador program */
+.amb-page .hero h1 { font-size: clamp(28px, 5vw, 46px); }
+.amb-tiers { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.amb-note { font-size: 13px; margin: 10px 0 0; }
+.amb-list { margin: 8px 0 0; padding-left: 18px; color: var(--muted); display: grid; gap: 8px; font-size: 14px; }
+.amb-list b { color: var(--text); }
+.amb-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 9px 11px; border-radius: 9px; font: inherit; resize: vertical; }
+.amb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 12px; }
+.amb-stats .stat { text-align: center; }
+.amb-bar { height: 8px; border-radius: 999px; background: var(--bg-elev, var(--bg)); border: 1px solid var(--border); overflow: hidden; }
+.amb-bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.amb-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+@media (max-width: 640px) {
+  .amb-two { grid-template-columns: 1fr; }
+  .amb-cta { flex-direction: column; align-items: flex-start; }
+}

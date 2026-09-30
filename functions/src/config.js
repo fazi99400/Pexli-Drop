@@ -67,6 +67,16 @@ const DEFAULT_CONFIG = {
     enabled: true,
     rewards: { rank1: 200, rank2: 150, rank3: 100, top10: 75, top50: 50, top100: 30 },
   },
+  // Ambassador program (src/ambassador.js). Tier thresholds are VERIFIED
+  // community members (referred users who saved a wallet). Lead/Champion are
+  // eligible for the post-funding cash reward — a flag, not a payout.
+  ambassador: {
+    enabled: true,
+    postPoints: 25,
+    weeklyPostCap: 7,
+    tiers: { rising: 500, lead: 5000, champion: 10000 },
+    tierBonus: { rising: 2000, lead: 20000, champion: 50000 },
+  },
 };
 
 const CONFIG_REF = db.collection("config").doc("global");
@@ -97,6 +107,15 @@ async function getConfig() {
       rewards: {
         ...DEFAULT_CONFIG.leaderboard.rewards,
         ...((data.leaderboard || {}).rewards || {}),
+      },
+    },
+    ambassador: {
+      ...DEFAULT_CONFIG.ambassador,
+      ...(data.ambassador || {}),
+      tiers: { ...DEFAULT_CONFIG.ambassador.tiers, ...((data.ambassador || {}).tiers || {}) },
+      tierBonus: {
+        ...DEFAULT_CONFIG.ambassador.tierBonus,
+        ...((data.ambassador || {}).tierBonus || {}),
       },
     },
   };

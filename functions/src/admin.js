@@ -66,6 +66,21 @@ const updateConfig = onCall(CALL_OPTS, async (request) => {
       }
     }
   }
+  if (patch.ambassador) {
+    const a = patch.ambassador;
+    const num = (v) => Math.max(0, Number(v) || 0);
+    clean.ambassador = {};
+    if ("enabled" in a) clean.ambassador.enabled = Boolean(a.enabled);
+    if ("postPoints" in a) clean.ambassador.postPoints = num(a.postPoints);
+    if ("weeklyPostCap" in a) clean.ambassador.weeklyPostCap = num(a.weeklyPostCap);
+    for (const group of ["tiers", "tierBonus"]) {
+      if (!a[group]) continue;
+      clean.ambassador[group] = {};
+      for (const k of Object.keys(DEFAULT_CONFIG.ambassador[group])) {
+        if (k in a[group]) clean.ambassador[group][k] = num(a[group][k]);
+      }
+    }
+  }
   await CONFIG_REF.set(clean, { merge: true });
   const fresh = await CONFIG_REF.get();
   return fresh.data();
