@@ -3,10 +3,12 @@ import { api, errMessage } from "../lib/functions";
 import { useAuth } from "../context/AuthContext";
 import Icon from "./Icon";
 
-// Activation "link both logins" card. Every account must have BOTH a Google and
-// an X login linked (one person → one Google → one X). Whichever the user did
-// NOT sign up with is offered as a Connect button here. Uniqueness is enforced
-// server-side: Google natively (auth/credential-already-in-use), X via xIndex.
+// "Your logins" card. ONE login (Google OR X) is enough for an active account
+// (see AuthContext.isActive); linking the other one is optional and just lets
+// the user sign in either way (and unlocks the X quests). Whichever the user
+// did NOT sign up with is offered as a Connect button here. Uniqueness is
+// enforced server-side: Google natively (auth/credential-already-in-use), X
+// via xIndex.
 export function AccountLinks({ profile, onSaved }) {
   const { googleLinked, xLinked, linkGoogle } = useAuth();
   const [busy, setBusy] = useState("");
@@ -44,10 +46,11 @@ export function AccountLinks({ profile, onSaved }) {
 
   return (
     <div className="panel">
-      <h3 className="card-title"><Icon name="users" /> Link both logins</h3>
+      <h3 className="card-title"><Icon name="users" /> Your logins</h3>
       <p className="task-desc">
-        Connect <b>both</b> Google and X to your account. Each can be linked to only one Pexli
-        account, and you can then sign in with either.
+        One login (Google <b>or</b> X) is enough, your account is active with just one. Linking the
+        other is optional: it lets you sign in either way and unlocks the X quests. Each Google or
+        X account can be linked to only one Pexli account.
       </p>
       {err && <p className="msg err">{err}</p>}
 
