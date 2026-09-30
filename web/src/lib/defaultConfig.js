@@ -38,4 +38,11 @@ export const DEFAULT_CONFIG = {
     enabled: true,
     rewards: { rank1: 200, rank2: 150, rank3: 100, top10: 75, top50: 50, top100: 30 },
   },
+  ambassador: {
+    enabled: true,
+    postPoints: 25,
+    weeklyPostCap: 7,
+    tiers: { rising: 500, lead: 5000, champion: 10000 },
+    tierBonus: { rising: 2000, lead: 20000, champion: 50000 },
+  },
 };

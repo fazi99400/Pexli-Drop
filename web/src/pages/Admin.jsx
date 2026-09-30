@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { api, errMessage } from "../lib/functions";
 import { StatCard, Bars, AreaLine, Donut } from "../components/StatCharts";
 
-const TABS = ["Dashboard", "Tasks & Points", "Tweet Pool", "Moderation", "Users", "Admins"];
+const TABS = ["Dashboard", "Tasks & Points", "Tweet Pool", "Moderation", "Ambassadors", "Users", "Admins"];
 
 export default function Admin() {
   const [tab, setTab] = useState(TABS[0]);
@@ -23,6 +23,7 @@ export default function Admin() {
       {tab === "Tasks & Points" && <ConfigTab />}
       {tab === "Tweet Pool" && <TweetPoolTab />}
       {tab === "Moderation" && <ModerationTab />}
+      {tab === "Ambassadors" && <AmbassadorsTab />}
       {tab === "Users" && <UsersTab />}
       {tab === "Admins" && <AdminsTab />}
     </>
@@ -32,6 +33,159 @@ export default function Admin() {
 function Msg({ msg }) {
   if (!msg) return null;
   return <p className={`msg ${msg.ok ? "ok" : "err"}`}>{msg.text}</p>;
+}
+
+// --- Ambassador program -----------------------------------------------------
+// Review applications + edit the program settings. Ambassador X posts land in
+// the normal Moderation tab (taskType "ambassador_post").
+function AmbassadorsTab() {
+  const { config } = useAuth();
+  const [status, setStatus] = useState("pending");
+  const [rows, setRows] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const a = config?.ambassador || {};
+  const [cfg, setCfg] = useState({
+    enabled: a.enabled ?? true,
+    postPoints: a.postPoints ?? 25,
+    weeklyPostCap: a.weeklyPostCap ?? 7,
+    rising: a.tiers?.rising ?? 500,
+    lead: a.tiers?.lead ?? 5000,
+    champion: a.tiers?.champion ?? 10000,
+    bRising: a.tierBonus?.rising ?? 2000,
+    bLead: a.tierBonus?.lead ?? 20000,
+    bChampion: a.tierBonus?.champion ?? 50000,
+  });
+
+  async function load(s = status) {
+    setRows(null);
+    setMsg(null);
+    try {
+      const res = await api.ambassador({ action: "adminList", status: s });
+      setRows(res.data.rows || []);
+    } catch (e) {
+      setRows([]);
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+  useEffect(() => {
+    load(status);
+  }, [status]);
+
+  async function review(uid, decision) {
+    const note = decision === "rejected" ? window.prompt("Reason shown to the applicant (optional):") || "" : "";
+    try {
+      await api.ambassador({ action: "adminReview", uid, decision, note });
+      setRows((r) => r.filter((x) => x.uid !== uid));
+      setMsg({ ok: true, text: `Application ${decision}.` });
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+
+  async function saveCfg() {
+    try {
+      await api.updateConfig({
+        patch: {
+          ambassador: {
+            enabled: cfg.enabled,
+            postPoints: cfg.postPoints,
+            weeklyPostCap: cfg.weeklyPostCap,
+            tiers: { rising: cfg.rising, lead: cfg.lead, champion: cfg.champion },
+            tierBonus: { rising: cfg.bRising, lead: cfg.bLead, champion: cfg.bChampion },
+          },
+        },
+      });
+      setMsg({ ok: true, text: "Ambassador settings saved." });
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+
+  const num = (k) => ({
+    type: "number",
+    min: 0,
+    value: cfg[k],
+    onChange: (e) => setCfg({ ...cfg, [k]: Number(e.target.value) }),
+  });
+
+  return (
+    <div>
+      <div className="panel">
+        <h3 className="task-title">Program settings</h3>
+        <label className="row" style={{ gap: 8, marginBottom: 10 }}>
+          <input type="checkbox" checked={cfg.enabled} onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })} />
+          Applications and post submissions open
+        </label>
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+          <div className="field"><label>Points per post</label><input {...num("postPoints")} /></div>
+          <div className="field"><label>Posts per week</label><input {...num("weeklyPostCap")} /></div>
+          <div className="field"><label>Rising: members</label><input {...num("rising")} /></div>
+          <div className="field"><label>Lead: members</label><input {...num("lead")} /></div>
+          <div className="field"><label>Champion: members</label><input {...num("champion")} /></div>
+          <div className="field"><label>Rising bonus pts</label><input {...num("bRising")} /></div>
+          <div className="field"><label>Lead bonus pts</label><input {...num("bLead")} /></div>
+          <div className="field"><label>Champion bonus pts</label><input {...num("bChampion")} /></div>
+        </div>
+        <button className="btn btn-sm btn-primary" onClick={saveCfg}>
+          Save settings
+        </button>
+      </div>
+
+      <div className="row spread mt">
+        <h3 className="task-title">Applications</h3>
+        <div className="row" style={{ gap: 6 }}>
+          {["pending", "approved", "rejected"].map((s) => (
+            <button key={s} className={`btn btn-sm ${status === s ? "btn-primary" : ""}`} onClick={() => setStatus(s)}>
+              {s}
+            </button>
+          ))}
+          <button className="btn btn-sm" onClick={() => load()}>
+            Refresh
+          </button>
+        </div>
+      </div>
+      <Msg msg={msg} />
+      {!rows ? (
+        <div className="spin" />
+      ) : rows.length === 0 ? (
+        <p className="subtle">No {status} applications.</p>
+      ) : (
+        <div className="grid mt">
+          {rows.map((r) => (
+            <div className="card" key={r.uid}>
+              <div className="row spread">
+                <a href={`https://x.com/${r.xHandle}`} target="_blank" rel="noreferrer">
+                  <b>@{r.xHandle}</b>
+                </a>
+                <span className="badge">{r.tier}</span>
+              </div>
+              <p className="subtle" style={{ margin: "6px 0" }}>
+                {r.displayName || "—"} · {r.region} · {r.language}
+              </p>
+              {r.audience && <p style={{ margin: "4px 0" }}><b>Audience:</b> {r.audience}</p>}
+              {r.community && <p style={{ margin: "4px 0" }}><b>Community:</b> {r.community}</p>}
+              <p style={{ margin: "4px 0", whiteSpace: "pre-wrap" }}><b>Plan:</b> {r.plan}</p>
+              <p className="subtle" style={{ fontSize: 12 }}>
+                {r.verifiedMembers} verified / {r.invited} invited · wallet {r.wallet?.slice(0, 8)}… ·{" "}
+                {r.appliedAt ? new Date(r.appliedAt).toLocaleDateString() : ""}
+                {r.note ? ` · note: ${r.note}` : ""}
+              </p>
+              {status !== "approved" && (
+                <button className="btn btn-sm btn-primary" onClick={() => review(r.uid, "approved")}>
+                  Approve
+                </button>
+              )}{" "}
+              {status !== "rejected" && (
+                <button className="btn btn-sm btn-danger" onClick={() => review(r.uid, "rejected")}>
+                  {status === "approved" ? "Remove" : "Reject"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // --- Analytics dashboard ----------------------------------------------------

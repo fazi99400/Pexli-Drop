@@ -13,6 +13,7 @@ export const api = {
   setDisplayName: call("setDisplayName"),
   getMyReferrals: call("getMyReferrals"),
   getLeaderboard: call("getLeaderboard"),
+  ambassador: call("ambassador"), // { action: get | apply | submitPost | adminList | adminReview }
 
   claimFaucet: call("claimFaucet"),
   verifyTxHash: call("verifyTxHash"),

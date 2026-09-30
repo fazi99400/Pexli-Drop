@@ -23,6 +23,7 @@ const WalletPage = lazy(() => import("./pages/Wallet"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Admin = lazy(() => import("./pages/Admin"));
 const WalletSecurity = lazy(() => import("./pages/WalletSecurity"));
+const Ambassador = lazy(() => import("./pages/Ambassador"));
 
 // Shown when the build has no Firebase env config — prevents the blank page and
 // tells the operator exactly what to set.
@@ -165,6 +166,7 @@ export default function App() {
           <Route path="/faq" element={<Faq />} />
           <Route path="/guide" element={<Guide />} />
           <Route path="/wallet-security" element={<WalletSecurity />} />
+          <Route path="/ambassador" element={<Ambassador />} />
           <Route
             path="/activate"
             element={!user ? <Login /> : isActive ? <Navigate to="/" replace /> : <Activate />}
@@ -183,6 +185,7 @@ export default function App() {
           <div className="row spread">
             <div>
               <Link to="/guide">Guide</Link>
+              <Link to="/ambassador">Ambassadors</Link>
               <Link to="/faq">FAQ</Link>
               <a href={LINKS.main}>Pexli</a>
               <a href={LINKS.faucet}>Faucet</a>
