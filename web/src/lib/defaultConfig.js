@@ -44,5 +44,12 @@ export const DEFAULT_CONFIG = {
     weeklyPostCap: 7,
     tiers: { rising: 500, lead: 5000, champion: 10000 },
     tierBonus: { rising: 2000, lead: 20000, champion: 50000 },
+    tierMultiplier: { ambassador: 1, rising: 1.1, lead: 1.25, champion: 1.5 },
+    ambassadorReferralPercent: 15,
+    teamSharePercent: 3,
+    sponsorMilestones: { m1: 100, m2: 500, m3: 1000 },
+    sponsorMilestoneBonus: { m1: 1000, m2: 3000, m3: 5000 },
+    activityMin: 4,
+    boardMemberPoints: 10,
   },
 };

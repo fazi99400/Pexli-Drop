@@ -36,154 +36,580 @@ function Msg({ msg }) {
 }
 
 // --- Ambassador program -----------------------------------------------------
-// Review applications + edit the program settings. Ambassador X posts land in
-// the normal Moderation tab (taskType "ambassador_post").
+// Applications (with private contacts), missions CRUD and program settings.
+// Ambassador posts / missions land in the normal Moderation tab
+// (taskType "ambassador_post" / "ambassador_mission").
+const AMB_TIERS = ["ambassador", "rising", "lead", "champion"];
+const AMB_TIER_LABEL = { ambassador: "Ambassador", rising: "Rising", lead: "Lead", champion: "Champion" };
+
 function AmbassadorsTab() {
-  const { config } = useAuth();
+  const [sub, setSub] = useState("Applications");
+  return (
+    <div>
+      <div className="row" style={{ gap: 6, marginBottom: 14 }}>
+        {["Applications", "Missions", "Settings"].map((t) => (
+          <button key={t} className={`btn btn-sm ${sub === t ? "btn-primary" : ""}`} onClick={() => setSub(t)}>
+            {t}
+          </button>
+        ))}
+      </div>
+      {sub === "Applications" && <AmbApplications />}
+      {sub === "Missions" && <AmbMissions />}
+      {sub === "Settings" && <AmbSettings />}
+    </div>
+  );
+}
+
+function AmbApplications() {
   const [status, setStatus] = useState("pending");
-  const [rows, setRows] = useState(null);
+  const [country, setCountry] = useState("");
+  const [tier, setTier] = useState("");
+  const [data, setData] = useState(null);
   const [msg, setMsg] = useState(null);
+
+  async function load() {
+    setData(null);
+    setMsg(null);
+    try {
+      const res = await api.ambassador({ action: "adminList", status, country, tier });
+      setData(res.data);
+    } catch (e) {
+      setData({ rows: [], countries: [] });
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+  useEffect(() => {
+    load();
+  }, [status, tier]);
+
+  async function act(payload, ok) {
+    setMsg(null);
+    try {
+      const res = await api.ambassador(payload);
+      const extra =
+        res.data?.forfeited !== undefined ? ` Forfeited ${res.data.forfeited} pts, rejected ${res.data.rejectedPending} pending.` : "";
+      setMsg({ ok: true, text: ok + extra });
+      load();
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+
+  async function exportCsv() {
+    setMsg(null);
+    try {
+      const res = await api.ambassador({ action: "adminExport" });
+      const blob = new Blob([res.data.csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pexli-ambassadors-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setMsg({ ok: true, text: `Exported ${res.data.count} applications (includes private contacts, keep it safe).` });
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+
+  return (
+    <div>
+      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+        {["pending", "approved", "rejected", "removed", "all"].map((s) => (
+          <button key={s} className={`btn btn-sm ${status === s ? "btn-primary" : ""}`} onClick={() => setStatus(s)}>
+            {s}
+          </button>
+        ))}
+      </div>
+      <div className="row mt" style={{ gap: 8, flexWrap: "wrap" }}>
+        <input
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && load()}
+          placeholder="Country"
+          list="amb-admin-countries"
+          style={{ maxWidth: 180 }}
+        />
+        <datalist id="amb-admin-countries">
+          {(data?.countries || []).map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+        <select value={tier} onChange={(e) => setTier(e.target.value)}>
+          <option value="">All tiers</option>
+          {AMB_TIERS.map((t) => (
+            <option key={t} value={t}>
+              {AMB_TIER_LABEL[t]}
+            </option>
+          ))}
+        </select>
+        <button className="btn btn-sm" onClick={load}>
+          Apply filter
+        </button>
+        <button className="btn btn-sm" onClick={exportCsv}>
+          Export CSV
+        </button>
+      </div>
+      <Msg msg={msg} />
+      {!data ? (
+        <div className="spin" />
+      ) : data.rows.length === 0 ? (
+        <p className="subtle">No {status === "all" ? "" : status} applications.</p>
+      ) : (
+        <div className="grid mt">
+          {data.rows.map((r) => (
+            <AmbAdminCard key={r.uid} r={r} act={act} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AmbAdminCard({ r, act }) {
+  const d = (ms) => (ms ? new Date(ms).toLocaleDateString() : "");
+  const plat = Object.entries(r.platforms || {})
+    .map(([k, v]) => `${k}: ${Number(v).toLocaleString()}`)
+    .join(" · ");
+  function strike() {
+    const reason = window.prompt("Strike reason (shown to the ambassador):");
+    if (reason) act({ action: "adminStrike", uid: r.uid, reason }, "Strike added.");
+  }
+  function remove(fraud) {
+    const reason = window.prompt(fraud ? "Fraud details (internal + shown as removal reason):" : "Removal reason:");
+    if (reason === null) return;
+    if (fraud && !window.confirm("Remove for fraud and forfeit ALL ambassador points (posts, missions, tier bonuses, team shares)?")) return;
+    act({ action: "adminRemove", uid: r.uid, reason, fraud }, fraud ? "Removed for fraud." : "Removed.");
+  }
+  function sponsor() {
+    const v = window.prompt("Sponsor: code, @handle or uid of an approved ambassador (empty = none):", r.sponsorHandle ? `@${r.sponsorHandle}` : "");
+    if (v !== null) act({ action: "adminSetSponsor", uid: r.uid, sponsor: v }, "Sponsor updated.");
+  }
+  return (
+    <div className="card amb-admin-card">
+      <div className="row spread">
+        <a href={`https://x.com/${r.xHandle}`} target="_blank" rel="noreferrer">
+          <b>@{r.xHandle}</b>
+        </a>
+        <span className="row" style={{ gap: 4 }}>
+          <span className={`badge ${r.status === "approved" ? "on" : r.status === "pending" ? "pending" : "off"}`}>{r.status}</span>
+          <span className="badge">{AMB_TIER_LABEL[r.tier]}{r.tierOverride ? " (override)" : ""}</span>
+        </span>
+      </div>
+      <p className="subtle" style={{ margin: "6px 0" }}>
+        {r.displayName || "—"} · {r.region} · {r.language} · {r.weeklyHours || "?"} h/week
+        {r.age18 ? " · 18+" : ""}
+        {r.cocAgreed ? " · CoC agreed" : ""}
+      </p>
+      <p style={{ margin: "4px 0", fontSize: 14 }}>
+        <b>Contact:</b> {r.email || "—"} · {r.whatsapp || "—"} · {r.telegram || "—"}
+        {r.consentAt ? <span className="subtle"> (consent {d(r.consentAt)})</span> : null}
+      </p>
+      {plat && <p style={{ margin: "4px 0", fontSize: 14 }}><b>Platforms:</b> {plat}</p>}
+      {r.audience && <p style={{ margin: "4px 0" }}><b>Audience:</b> {r.audience}</p>}
+      {r.community && <p style={{ margin: "4px 0" }}><b>Community:</b> {r.community}</p>}
+      <p style={{ margin: "4px 0", whiteSpace: "pre-wrap" }}><b>Plan:</b> {r.plan}</p>
+      {(r.samples || []).length > 0 && (
+        <div style={{ margin: "4px 0", fontSize: 13 }}>
+          <b>Samples:</b>
+          {r.samples.map((s) => (
+            <div key={s} className="mono" style={{ overflowWrap: "anywhere" }}>
+              <a href={s} target="_blank" rel="noreferrer">{s}</a>
+            </div>
+          ))}
+        </div>
+      )}
+      {r.recommendations.length > 0 && (
+        <p style={{ margin: "4px 0", fontSize: 14 }}>
+          <b>Recommended by:</b>{" "}
+          {r.recommendations.map((x) => `@${x.handle}${x.note ? ` ("${x.note}")` : ""}`).join(", ")}
+        </p>
+      )}
+      <p className="subtle" style={{ fontSize: 12 }}>
+        {r.verifiedMembers} verified / {r.invited} invited · {r.monthApproved} approved this month
+        {r.inactive ? " · INACTIVE" : ""} · sponsor {r.sponsorHandle ? `@${r.sponsorHandle}` : "none"}
+        {r.vanityCode ? ` · code ${r.vanityCode}` : ""}
+        {r.regionalLead ? " · Regional Lead" : ""} · wallet {r.wallet?.slice(0, 8)}… · applied {d(r.appliedAt)}
+        {r.note ? ` · note: ${r.note}` : ""}
+        {r.removedReason ? ` · removed: ${r.removedReason}` : ""}
+        {r.forfeited ? ` · forfeited ${r.forfeited} pts` : ""}
+      </p>
+      {r.strikes.length > 0 && (
+        <div style={{ fontSize: 13, margin: "4px 0" }}>
+          <b>Strikes ({r.strikes.length}/3):</b>
+          {r.strikes.map((s, i) => (
+            <div key={i} className="row" style={{ gap: 6 }}>
+              <span>{s.reason} <span className="subtle">({d(s.at)})</span></span>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => act({ action: "adminRemoveStrike", uid: r.uid, index: i }, "Strike removed.")}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="amb-admin-actions">
+        {(r.status === "pending" || r.status === "rejected") && (
+          <button className="btn btn-sm btn-primary" onClick={() => act({ action: "adminReview", uid: r.uid, decision: "approved" }, "Approved.")}>
+            Approve
+          </button>
+        )}
+        {r.status === "pending" && (
+          <button
+            className="btn btn-sm btn-danger"
+            onClick={() => {
+              const note = window.prompt("Reason shown to the applicant (optional):");
+              if (note !== null) act({ action: "adminReview", uid: r.uid, decision: "rejected", note }, "Rejected.");
+            }}
+          >
+            Reject
+          </button>
+        )}
+        {r.status === "approved" && (
+          <>
+            <select
+              value={r.tierOverride || ""}
+              onChange={(e) => act({ action: "adminSetTier", uid: r.uid, tier: e.target.value || null }, "Tier updated.")}
+            >
+              <option value="">Tier: automatic</option>
+              {AMB_TIERS.map((t) => (
+                <option key={t} value={t}>
+                  Override: {AMB_TIER_LABEL[t]}
+                </option>
+              ))}
+            </select>
+            {(r.tier === "lead" || r.tier === "champion") && (
+              <button
+                className="btn btn-sm"
+                onClick={() => act({ action: "adminSetRegionalLead", uid: r.uid, on: !r.regionalLead }, "Regional Lead updated.")}
+              >
+                {r.regionalLead ? "Unset Regional Lead" : "Make Regional Lead"}
+              </button>
+            )}
+            {r.vanityCode && (
+              <button className="btn btn-sm" onClick={() => act({ action: "adminRevokeVanity", uid: r.uid }, "Code revoked.")}>
+                Revoke code {r.vanityCode}
+              </button>
+            )}
+            <button className="btn btn-sm" onClick={sponsor}>
+              Sponsor
+            </button>
+            <button className="btn btn-sm" onClick={strike}>
+              Strike
+            </button>
+            <button className="btn btn-sm btn-danger" onClick={() => remove(false)}>
+              Remove
+            </button>
+            <button className="btn btn-sm btn-danger" onClick={() => remove(true)}>
+              Fraud
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const MISSION_TYPES = {
+  x_post: "X post",
+  x_thread: "X thread",
+  short_video: "Short video",
+  community_event: "Community event",
+  translation: "Translation",
+  bug_report: "Bug report",
+  meme: "Meme",
+};
+const toInputDate = (ms) => (ms ? new Date(ms - new Date(ms).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "");
+const fromInputDate = (v) => (v ? new Date(v).getTime() : null);
+const EMPTY_MISSION = { id: null, title: "", description: "", type: "x_post", points: 50, startAt: "", endAt: "", maxPerAmbassador: 1, active: true };
+
+function AmbMissions() {
+  const [list, setList] = useState(null);
+  const [f, setF] = useState(EMPTY_MISSION);
+  const [msg, setMsg] = useState(null);
+
+  async function load() {
+    try {
+      const res = await api.ambassador({ action: "adminMissions" });
+      setList(res.data.missions || []);
+    } catch (e) {
+      setList([]);
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function save(e) {
+    e.preventDefault();
+    setMsg(null);
+    try {
+      await api.ambassador({
+        action: "adminMissionSave",
+        ...f,
+        startAt: fromInputDate(f.startAt),
+        endAt: fromInputDate(f.endAt),
+      });
+      setMsg({ ok: true, text: f.id ? "Mission updated." : "Mission created." });
+      setF(EMPTY_MISSION);
+      load();
+    } catch (e2) {
+      setMsg({ ok: false, text: errMessage(e2) });
+    }
+  }
+  async function toggle(m) {
+    try {
+      await api.ambassador({ action: "adminMissionSave", ...m, active: !m.active });
+      load();
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+  async function del(m) {
+    if (!window.confirm(`Delete mission "${m.title}"?`)) return;
+    try {
+      await api.ambassador({ action: "adminMissionDelete", id: m.id });
+      load();
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
+  return (
+    <div>
+      <form className="panel" onSubmit={save}>
+        <h3 className="task-title">{f.id ? "Edit mission" : "New mission"}</h3>
+        <div className="field">
+          <label>Title</label>
+          <input value={f.title} onChange={set("title")} required />
+        </div>
+        <div className="field">
+          <label>Description</label>
+          <textarea rows={3} value={f.description} onChange={set("description")} />
+        </div>
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+          <div className="field">
+            <label>Type</label>
+            <select value={f.type} onChange={set("type")}>
+              {Object.entries(MISSION_TYPES).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Points</label>
+            <input type="number" min={0} value={f.points} onChange={set("points")} />
+          </div>
+          <div className="field">
+            <label>Max per ambassador (0 = no limit)</label>
+            <input type="number" min={0} value={f.maxPerAmbassador} onChange={set("maxPerAmbassador")} />
+          </div>
+          <div className="field">
+            <label>Start</label>
+            <input type="datetime-local" value={f.startAt} onChange={set("startAt")} />
+          </div>
+          <div className="field">
+            <label>End</label>
+            <input type="datetime-local" value={f.endAt} onChange={set("endAt")} />
+          </div>
+        </div>
+        <label className="row" style={{ gap: 8, margin: "4px 0 12px" }}>
+          <input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} />
+          Active
+        </label>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn btn-sm btn-primary">{f.id ? "Save mission" : "Create mission"}</button>
+          {f.id && (
+            <button type="button" className="btn btn-sm" onClick={() => setF(EMPTY_MISSION)}>
+              Cancel
+            </button>
+          )}
+        </div>
+      </form>
+      <Msg msg={msg} />
+      {!list ? (
+        <div className="spin" />
+      ) : list.length === 0 ? (
+        <p className="subtle">No missions yet.</p>
+      ) : (
+        <div className="table-wrap mt">
+          <table>
+            <thead>
+              <tr>
+                <th>Mission</th>
+                <th>Type</th>
+                <th>Points</th>
+                <th>Window</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((m) => (
+                <tr key={m.id}>
+                  <td>
+                    {m.title} {m.active ? <span className="badge on">active</span> : <span className="badge">off</span>}
+                  </td>
+                  <td>{m.typeLabel}</td>
+                  <td>{m.points}{m.maxPerAmbassador ? ` · max ${m.maxPerAmbassador}` : ""}</td>
+                  <td className="subtle" style={{ fontSize: 12 }}>
+                    {m.startAt ? new Date(m.startAt).toLocaleDateString() : "now"} → {m.endAt ? new Date(m.endAt).toLocaleDateString() : "open"}
+                  </td>
+                  <td className="row" style={{ gap: 4 }}>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => setF({ ...m, startAt: toInputDate(m.startAt), endAt: toInputDate(m.endAt) })}
+                    >
+                      Edit
+                    </button>
+                    <button className="btn btn-sm" onClick={() => toggle(m)}>
+                      {m.active ? "Pause" : "Activate"}
+                    </button>
+                    <button className="btn btn-sm btn-danger" onClick={() => del(m)}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AmbSettings() {
+  const { config } = useAuth();
   const a = config?.ambassador || {};
   const [cfg, setCfg] = useState({
     enabled: a.enabled ?? true,
     postPoints: a.postPoints ?? 25,
     weeklyPostCap: a.weeklyPostCap ?? 7,
-    rising: a.tiers?.rising ?? 500,
-    lead: a.tiers?.lead ?? 5000,
-    champion: a.tiers?.champion ?? 10000,
-    bRising: a.tierBonus?.rising ?? 2000,
-    bLead: a.tierBonus?.lead ?? 20000,
-    bChampion: a.tierBonus?.champion ?? 50000,
+    activityMin: a.activityMin ?? 4,
+    boardMemberPoints: a.boardMemberPoints ?? 10,
+    ambassadorReferralPercent: a.ambassadorReferralPercent ?? 15,
+    teamSharePercent: a.teamSharePercent ?? 3,
+    tiers: { rising: 500, lead: 5000, champion: 10000, ...(a.tiers || {}) },
+    tierBonus: { rising: 2000, lead: 20000, champion: 50000, ...(a.tierBonus || {}) },
+    tierMultiplier: { ambassador: 1, rising: 1.1, lead: 1.25, champion: 1.5, ...(a.tierMultiplier || {}) },
+    sponsorMilestones: { m1: 100, m2: 500, m3: 1000, ...(a.sponsorMilestones || {}) },
+    sponsorMilestoneBonus: { m1: 1000, m2: 3000, m3: 5000, ...(a.sponsorMilestoneBonus || {}) },
   });
+  const [priv, setPriv] = useState({ groupLink: "", announcement: "" });
+  const [msg, setMsg] = useState(null);
 
-  async function load(s = status) {
-    setRows(null);
+  useEffect(() => {
+    api
+      .ambassador({ action: "adminSettings" })
+      .then((r) => setPriv({ groupLink: r.data.groupLink || "", announcement: r.data.announcement?.text || "" }))
+      .catch((e) => setMsg({ ok: false, text: errMessage(e) }));
+  }, []);
+
+  async function save() {
     setMsg(null);
     try {
-      const res = await api.ambassador({ action: "adminList", status: s });
-      setRows(res.data.rows || []);
-    } catch (e) {
-      setRows([]);
-      setMsg({ ok: false, text: errMessage(e) });
-    }
-  }
-  useEffect(() => {
-    load(status);
-  }, [status]);
-
-  async function review(uid, decision) {
-    const note = decision === "rejected" ? window.prompt("Reason shown to the applicant (optional):") || "" : "";
-    try {
-      await api.ambassador({ action: "adminReview", uid, decision, note });
-      setRows((r) => r.filter((x) => x.uid !== uid));
-      setMsg({ ok: true, text: `Application ${decision}.` });
-    } catch (e) {
-      setMsg({ ok: false, text: errMessage(e) });
-    }
-  }
-
-  async function saveCfg() {
-    try {
-      await api.updateConfig({
-        patch: {
-          ambassador: {
-            enabled: cfg.enabled,
-            postPoints: cfg.postPoints,
-            weeklyPostCap: cfg.weeklyPostCap,
-            tiers: { rising: cfg.rising, lead: cfg.lead, champion: cfg.champion },
-            tierBonus: { rising: cfg.bRising, lead: cfg.bLead, champion: cfg.bChampion },
-          },
-        },
-      });
+      await api.updateConfig({ patch: { ambassador: cfg } });
+      await api.ambassador({ action: "adminSaveSettings", ...priv });
       setMsg({ ok: true, text: "Ambassador settings saved." });
     } catch (e) {
       setMsg({ ok: false, text: errMessage(e) });
     }
   }
+  async function refreshAll() {
+    setMsg(null);
+    try {
+      const r = await api.ambassador({ action: "adminRefreshAll" });
+      setMsg({ ok: true, text: `Refreshed ${r.data.refreshed} of ${r.data.ambassadors} ambassadors.` });
+    } catch (e) {
+      setMsg({ ok: false, text: errMessage(e) });
+    }
+  }
 
-  const num = (k) => ({
+  const num = (k, step = 1) => ({
     type: "number",
     min: 0,
+    step,
     value: cfg[k],
     onChange: (e) => setCfg({ ...cfg, [k]: Number(e.target.value) }),
   });
+  const nested = (g, k, step = 1) => ({
+    type: "number",
+    min: 0,
+    step,
+    value: cfg[g][k],
+    onChange: (e) => setCfg({ ...cfg, [g]: { ...cfg[g], [k]: Number(e.target.value) } }),
+  });
+  const grid = { gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 };
 
   return (
     <div>
       <div className="panel">
-        <h3 className="task-title">Program settings</h3>
-        <label className="row" style={{ gap: 8, marginBottom: 10 }}>
-          <input type="checkbox" checked={cfg.enabled} onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })} />
-          Applications and post submissions open
-        </label>
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-          <div className="field"><label>Points per post</label><input {...num("postPoints")} /></div>
-          <div className="field"><label>Posts per week</label><input {...num("weeklyPostCap")} /></div>
-          <div className="field"><label>Rising: members</label><input {...num("rising")} /></div>
-          <div className="field"><label>Lead: members</label><input {...num("lead")} /></div>
-          <div className="field"><label>Champion: members</label><input {...num("champion")} /></div>
-          <div className="field"><label>Rising bonus pts</label><input {...num("bRising")} /></div>
-          <div className="field"><label>Lead bonus pts</label><input {...num("bLead")} /></div>
-          <div className="field"><label>Champion bonus pts</label><input {...num("bChampion")} /></div>
+        <h3 className="task-title">Private (ambassadors only)</h3>
+        <div className="field">
+          <label>Private ambassador Telegram group link</label>
+          <input value={priv.groupLink} onChange={(e) => setPriv({ ...priv, groupLink: e.target.value })} placeholder="https://t.me/+..." />
         </div>
-        <button className="btn btn-sm btn-primary" onClick={saveCfg}>
-          Save settings
-        </button>
+        <div className="field">
+          <label>Announcement banner (empty = none)</label>
+          <textarea rows={3} value={priv.announcement} onChange={(e) => setPriv({ ...priv, announcement: e.target.value })} />
+        </div>
       </div>
 
-      <div className="row spread mt">
-        <h3 className="task-title">Applications</h3>
-        <div className="row" style={{ gap: 6 }}>
-          {["pending", "approved", "rejected"].map((s) => (
-            <button key={s} className={`btn btn-sm ${status === s ? "btn-primary" : ""}`} onClick={() => setStatus(s)}>
-              {s}
-            </button>
+      <div className="panel mt">
+        <h3 className="task-title">Program</h3>
+        <label className="row" style={{ gap: 8, marginBottom: 10 }}>
+          <input type="checkbox" checked={cfg.enabled} onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })} />
+          Applications and submissions open
+        </label>
+        <div className="grid" style={grid}>
+          <div className="field"><label>Points per daily post</label><input {...num("postPoints")} /></div>
+          <div className="field"><label>Posts per week</label><input {...num("weeklyPostCap")} /></div>
+          <div className="field"><label>Activity: approved / month</label><input {...num("activityMin")} /></div>
+          <div className="field"><label>Board: points per member</label><input {...num("boardMemberPoints")} /></div>
+          <div className="field"><label>Ambassador referral %</label><input {...num("ambassadorReferralPercent")} /></div>
+          <div className="field"><label>Team share %</label><input {...num("teamSharePercent", 0.5)} /></div>
+        </div>
+        <h4 className="amb-h4">Tiers (verified members → bonus, multiplier)</h4>
+        <div className="grid" style={grid}>
+          {["rising", "lead", "champion"].map((t) => (
+            <div className="field" key={t}><label>{AMB_TIER_LABEL[t]}: members</label><input {...nested("tiers", t)} /></div>
           ))}
-          <button className="btn btn-sm" onClick={() => load()}>
-            Refresh
+          {["rising", "lead", "champion"].map((t) => (
+            <div className="field" key={`b${t}`}><label>{AMB_TIER_LABEL[t]}: bonus pts</label><input {...nested("tierBonus", t)} /></div>
+          ))}
+          {AMB_TIERS.map((t) => (
+            <div className="field" key={`m${t}`}><label>{AMB_TIER_LABEL[t]}: multiplier</label><input {...nested("tierMultiplier", t, 0.05)} /></div>
+          ))}
+        </div>
+        <h4 className="amb-h4">Sponsor milestones (recruited ambassador reaches N members)</h4>
+        <div className="grid" style={grid}>
+          {["m1", "m2", "m3"].map((m, i) => (
+            <div className="field" key={m}><label>Milestone {i + 1}: members</label><input {...nested("sponsorMilestones", m)} /></div>
+          ))}
+          {["m1", "m2", "m3"].map((m, i) => (
+            <div className="field" key={`b${m}`}><label>Milestone {i + 1}: bonus pts</label><input {...nested("sponsorMilestoneBonus", m)} /></div>
+          ))}
+        </div>
+        <div className="row mt" style={{ gap: 8 }}>
+          <button className="btn btn-sm btn-primary" onClick={save}>
+            Save settings
+          </button>
+          <button className="btn btn-sm" onClick={refreshAll}>
+            Refresh all ambassador stats now
           </button>
         </div>
+        <p className="subtle" style={{ fontSize: 12 }}>
+          Stats, tier bonuses, sponsor milestones and the monthly activity rule also refresh automatically
+          every day at 00:00 UTC.
+        </p>
       </div>
       <Msg msg={msg} />
-      {!rows ? (
-        <div className="spin" />
-      ) : rows.length === 0 ? (
-        <p className="subtle">No {status} applications.</p>
-      ) : (
-        <div className="grid mt">
-          {rows.map((r) => (
-            <div className="card" key={r.uid}>
-              <div className="row spread">
-                <a href={`https://x.com/${r.xHandle}`} target="_blank" rel="noreferrer">
-                  <b>@{r.xHandle}</b>
-                </a>
-                <span className="badge">{r.tier}</span>
-              </div>
-              <p className="subtle" style={{ margin: "6px 0" }}>
-                {r.displayName || "—"} · {r.region} · {r.language}
-              </p>
-              {r.audience && <p style={{ margin: "4px 0" }}><b>Audience:</b> {r.audience}</p>}
-              {r.community && <p style={{ margin: "4px 0" }}><b>Community:</b> {r.community}</p>}
-              <p style={{ margin: "4px 0", whiteSpace: "pre-wrap" }}><b>Plan:</b> {r.plan}</p>
-              <p className="subtle" style={{ fontSize: 12 }}>
-                {r.verifiedMembers} verified / {r.invited} invited · wallet {r.wallet?.slice(0, 8)}… ·{" "}
-                {r.appliedAt ? new Date(r.appliedAt).toLocaleDateString() : ""}
-                {r.note ? ` · note: ${r.note}` : ""}
-              </p>
-              {status !== "approved" && (
-                <button className="btn btn-sm btn-primary" onClick={() => review(r.uid, "approved")}>
-                  Approve
-                </button>
-              )}{" "}
-              {status !== "rejected" && (
-                <button className="btn btn-sm btn-danger" onClick={() => review(r.uid, "rejected")}>
-                  {status === "approved" ? "Remove" : "Reject"}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -767,7 +1193,10 @@ function ModerationTab() {
                 const link = r.tweetUrl || (/^https?:/.test(r.refId) ? r.refId : null);
                 return (
                 <tr key={r.id}>
-                  <td>{r.taskType}</td>
+                  <td>
+                    {r.taskType}
+                    {r.missionTitle ? <div className="subtle" style={{ fontSize: 12 }}>{r.missionTitle}</div> : null}
+                  </td>
                   <td className="mono">
                     {link ? (
                       <a href={link} target="_blank" rel="noreferrer">
